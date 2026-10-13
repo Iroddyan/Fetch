@@ -227,7 +227,7 @@ class FetchWindow(Adw.ApplicationWindow):
 
         def work() -> None:
             try:
-                info, thumbnail = inspect_url(url)
+                info, thumbnail = inspect_url(url, self._advanced_options())
                 GLib.idle_add(self._show_media, info, thumbnail)
             except EngineError as error:
                 GLib.idle_add(self._show_error, str(error))

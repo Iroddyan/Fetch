@@ -83,14 +83,32 @@ def binary_version(name: str) -> str | None:
         return "Version unavailable"
 
 
-def inspect_url(url: str) -> tuple[MediaInfo, Path | None]:
+def _base_args(options: dict[str, object] | None = None) -> list[str]:
+    options = options or {}
+    args = []
+    if not bool(options.get("use_yt_dlp_config", False)):
+        args.append("--ignore-config")
+    cookies_file = str(options.get("cookies_file") or "")
+    browser_cookies = str(options.get("browser_cookies") or "")
+    if cookies_file:
+        args.extend(["--cookies", cookies_file])
+    elif browser_cookies:
+        args.extend(["--cookies-from-browser", browser_cookies])
+    proxy = str(options.get("proxy") or "").strip()
+    if proxy:
+        args.extend(["--proxy", proxy])
+    args.extend(["--retries", str(max(0, min(100, int(options.get("retry_count", 10) or 0))))])
+    return args
+
+
+def inspect_url(url: str, options: dict[str, object] | None = None) -> tuple[MediaInfo, Path | None]:
     executable = find_binary("yt-dlp")
     if not executable:
         raise EngineError("yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again.")
 
     command = [
         executable,
-        "--ignore-config",
+        *_base_args(options),
         "--no-warnings",
         "--flat-playlist",
         "--skip-download",
@@ -178,14 +196,20 @@ def download_url(
         raise EngineError("yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again.")
     destination.mkdir(parents=True, exist_ok=True)
     command = [executable]
-    if not use_yt_dlp_config:
-        command.append("--ignore-config")
+    base_options = {
+        "use_yt_dlp_config": use_yt_dlp_config,
+        "cookies_file": cookies_file,
+        "browser_cookies": browser_cookies,
+        "proxy": proxy,
+        "retry_count": retry_count,
+    }
     if audio_format:
         filename_template = "%(artist,creator,uploader,channel|Unknown Artist)s - %(title)s"
     else:
         filename_template = "%(title)s"
     if include_media_id:
         filename_template += " [%(id)s]"
+    command.extend(_base_args(base_options))
     command.extend([
         "--no-warnings",
         "--newline",
@@ -208,15 +232,8 @@ def download_url(
         command.append("--embed-chapters")
     if playlist_items:
         command.extend(["--playlist-items", playlist_items])
-    if cookies_file:
-        command.extend(["--cookies", cookies_file])
-    elif browser_cookies:
-        command.extend(["--cookies-from-browser", browser_cookies])
-    if proxy:
-        command.extend(["--proxy", proxy])
     if rate_limit:
         command.extend(["--limit-rate", rate_limit])
-    command.extend(["--retries", str(max(0, min(100, retry_count)))])
     if archive_file:
         command.extend(["--download-archive", archive_file])
     if sponsorblock:
