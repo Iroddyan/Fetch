@@ -48,7 +48,7 @@ Settings apply immediately and are saved under the user's XDG directories:
 
 The initial download location is the system Downloads directory, falling back to `~/Downloads`. Browser-cookie access can require extra filesystem permissions in a Flatpak; importing a cookies.txt file is the portable option.
 
-## Install and uninstall
+## Install, update, and uninstall
 
 Fetch can be installed as a locally built Flatpak or as a Fedora RPM. The Flatpak is built from this checkout; no Flathub listing is required. The RPM is intended for Fedora and compatible RPM systems that provide the dependencies listed in `packaging/fetch.spec`.
 
@@ -65,6 +65,12 @@ The first build may take a while because Flatpak Builder prepares the runtime an
 
 ```sh
 flatpak run com.iroddyan.fetch
+```
+
+To update Fetch itself, use the updated checkout and rerun the build/install command. Flatpak Builder rebuilds the application and updates the installed copy:
+
+```sh
+flatpak-builder --user --install --force-clean build-dir flatpak/com.iroddyan.fetch.yml
 ```
 
 To remove the application while keeping its private settings and managed yt-dlp/Deno files for a later reinstall:
@@ -98,6 +104,14 @@ sudo dnf install ~/rpmbuild/RPMS/noarch/fetch-1.1.0-1*.noarch.rpm
 
 DNF installs the runtime requirements declared by the RPM from your enabled repositories. Launch Fetch from the application menu or with `fetch`.
 
+To update Fetch itself, build the RPM from the updated checkout with `./packaging/build-rpm.sh`, then install the newly built RPM. DNF replaces the installed version and keeps your per-user data:
+
+```sh
+sudo dnf install "$HOME/rpmbuild/RPMS/noarch/REPLACE_WITH_THE_NEW_RPM_FILENAME"
+```
+
+Replace the filename with the new versioned RPM written by the build script. If the RPM filename changed, DNF may show it as an install/upgrade transaction; review and confirm the transaction to apply it.
+
 To uninstall the RPM:
 
 ```sh
@@ -107,6 +121,8 @@ sudo dnf remove fetch
 Removing the RPM leaves your per-user Fetch settings and data in place. They are stored in the XDG directories listed in [Settings and files](#settings-and-files); remove those folders manually only if you also want to erase your preferences, cookies, queue state, and managed yt-dlp/Deno binaries.
 
 The app requires network access for media inspection, downloads, and engine updates.
+
+Fetch app releases are separate from yt-dlp updates. To update the managed yt-dlp engine without rebuilding Fetch, use **Settings → Engine**; see [Engine updates](#engine-updates).
 
 ## About
 
