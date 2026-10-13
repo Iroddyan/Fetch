@@ -1,11 +1,14 @@
 #!/bin/sh
 set -eu
+USER_DATA_DIR=${XDG_DATA_HOME:-"${HOME:-}/.local/share"}
 if [ -d /app/lib/fetch ]; then
     APP_MODULES=/app/lib
+elif [ -d "$USER_DATA_DIR/fetch/fetch" ]; then
+    APP_MODULES="$USER_DATA_DIR/fetch"
 elif [ -d /usr/share/fetch/fetch ]; then
     APP_MODULES=/usr/share/fetch
 else
     APP_MODULES=/usr/lib/fetch
 fi
 export PYTHONPATH="${APP_MODULES}${PYTHONPATH:+:${PYTHONPATH}}"
-exec /usr/bin/python3 -m fetch "$@"
+exec /usr/bin/env python3 -m fetch "$@"
