@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Fetch
+Comment=Download media with clear controls and a native queue
+Exec=fetch
+Icon=com.iroddyan.fetch
+Terminal=false
+Type=Application
+Categories=Network;AudioVideo;Utility;
+Keywords=video;audio;download;yt-dlp;media;
+StartupNotify=true

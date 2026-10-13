@@ -1,0 +1,35 @@
+app-id: com.iroddyan.fetch
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: fetch
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.FileChooser
+  - --talk-name=org.freedesktop.portal.Documents
+add-extensions:
+  org.freedesktop.Platform.ffmpeg-full:
+    directory: lib/ffmpeg
+    version: '25.08'
+    add-ld-path: lib/ffmpeg/lib
+modules:
+  - name: fetch
+    buildsystem: simple
+    build-commands:
+      - install -d /app/lib/fetch /app/bin /app/share/applications /app/share/metainfo /app/share/icons/hicolor/scalable/apps
+      - cp -a fetch/. /app/lib/fetch/
+      - install -Dm755 packaging/fetch-launcher /app/bin/fetch
+      - install -Dm644 com.iroddyan.fetch.desktop /app/share/applications/com.iroddyan.fetch.desktop
+      - install -Dm644 packaging/com.iroddyan.fetch.metainfo.xml /app/share/metainfo/com.iroddyan.fetch.metainfo.xml
+      - install -Dm644 icons/hicolor/scalable/apps/com.iroddyan.fetch.svg /app/share/icons/hicolor/scalable/apps/com.iroddyan.fetch.svg
+      - ln -s ../lib/ffmpeg/bin/ffmpeg /app/bin/ffmpeg
+      - ln -s ../lib/ffmpeg/bin/ffprobe /app/bin/ffprobe
+    sources:
+      - type: dir
+        path: ..

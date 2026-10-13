@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+if [ -d /app/lib/fetch ]; then
+    APP_MODULES=/app/lib
+elif [ -d /usr/share/fetch/fetch ]; then
+    APP_MODULES=/usr/share/fetch
+else
+    APP_MODULES=/usr/lib/fetch
+fi
+export PYTHONPATH="${APP_MODULES}${PYTHONPATH:+:${PYTHONPATH}}"
+exec /usr/bin/python3 -m fetch "$@"

@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+.flatpak-builder/
+fastfetch-01.md
+build/
+dist/
