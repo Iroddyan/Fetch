@@ -383,6 +383,12 @@ class QueueManager:
                     elif code == 0:
                         item.status = "completed"
                         item.progress = 100.0
+                        item.entry_progress = 100.0
+                        item.progress_indeterminate = False
+                        item.stage = "Completed"
+                        item.speed = ""
+                        item.eta = ""
+                        item.logs.append("Download completed successfully.")
                     elif pause_requested and item.status in {"paused", "waiting"}:
                         item.error = ""
                     else:
