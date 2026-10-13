@@ -7,7 +7,9 @@
     <p>Inspect media links, choose formats, and manage downloads in a native Linux desktop app.</p>
   </description>
   <launchable type="desktop-id">com.iroddyan.fetch.desktop</launchable>
+  <url type="homepage">https://github.com/Iroddyan/Fetch</url>
   <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
   <developer id="com.iroddyan">
     <name>Iroddyan Waykins</name>
   </developer>

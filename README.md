@@ -50,7 +50,7 @@ The initial download location is the system Downloads directory, falling back to
 
 ## Packaging
 
-The Flatpak manifest is `flatpak/com.iroddyan.fetch.yml`. It uses GNOME Platform and the freedesktop ffmpeg extension. The Fedora RPM spec is `packaging/fetch.spec`. The app currently requires network access for media inspection, downloads, and engine updates.
+The Flatpak manifest is `flatpak/com.iroddyan.fetch.yml`. It uses GNOME Platform; the Freedesktop runtime supplies ffmpeg and ffprobe. The Fedora RPM spec is `packaging/fetch.spec`. The app currently requires network access for media inspection, downloads, and engine updates.
 
 Build a Fedora RPM from the checkout with `packaging/build-rpm.sh`; the package is written under `~/rpmbuild/RPMS/noarch/` by default. To build and install the Flatpak locally, use `flatpak-builder --user --install --force-clean build-dir flatpak/com.iroddyan.fetch.yml` after installing Flatpak Builder and enabling the GNOME and freedesktop runtimes.
 
@@ -60,7 +60,7 @@ Build a Fedora RPM from the checkout with `packaging/build-rpm.sh`; the package 
 - **Application ID:** `com.iroddyan.fetch`
 - **Creator and maintainer:** Iroddyan Waykins
 - **Development collaborator:** Codex (AI)
-- **License:** Not specified
+- **License:** MIT
 - **Platform:** Linux desktop
 
 ## Current limits

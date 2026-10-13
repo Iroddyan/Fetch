@@ -2,7 +2,7 @@ Name:           fetch
 Version:        1.1.0
 Release:        1%{?dist}
 Summary:        Native desktop frontend for yt-dlp
-License:        LicenseRef-NotSpecified
+License:        MIT
 BuildArch:      noarch
 Source0:        %{name}-%{version}.tar.gz
 Requires:       python3

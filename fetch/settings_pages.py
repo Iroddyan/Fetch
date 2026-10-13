@@ -304,7 +304,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         identity_group.add(Adw.ActionRow(title="Creator and Maintainer", subtitle=DEVELOPER_NAME))
         identity_group.add(Adw.ActionRow(title="Development Collaborator", subtitle="Codex · AI"))
         identity_group.add(Adw.ActionRow(title="Project", subtitle="Personal project · Linux desktop"))
-        identity_group.add(Adw.ActionRow(title="License", subtitle="Not specified"))
+        identity_group.add(Adw.ActionRow(title="License", subtitle="MIT"))
         identity_group.add(Adw.ActionRow(title="Copyright", subtitle=f"© 2026 {DEVELOPER_NAME}"))
         about.add(identity_group)
         versions_group = Adw.PreferencesGroup(title="Versions")
