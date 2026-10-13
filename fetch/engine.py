@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .dependencies import ffmpeg_install_hint, managed_deno_path, managed_yt_dlp_path
+from .dependencies import ffmpeg_install_hint, is_flatpak, managed_deno_path, managed_yt_dlp_path
 from .paths import cache_dir
 
 
@@ -145,7 +145,12 @@ def inspect_url(
 ) -> tuple[MediaInfo, Path | None]:
     executable = find_binary("yt-dlp")
     if not executable:
-        raise EngineError("yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again.")
+        message = (
+            "yt-dlp isn’t installed. Open Settings → Engine to install it."
+            if is_flatpak()
+            else "yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again."
+        )
+        raise EngineError(message)
 
     command = [
         executable,
@@ -277,7 +282,12 @@ def download_url(
 ) -> tuple[int, str]:
     executable = find_binary("yt-dlp")
     if not executable:
-        raise EngineError("yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again.")
+        message = (
+            "yt-dlp isn’t installed. Open Settings → Engine to install it."
+            if is_flatpak()
+            else "yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again."
+        )
+        raise EngineError(message)
     if audio_format or "+" in format_spec:
         missing = [name for name in ("ffmpeg", "ffprobe") if not shutil.which(name)]
         if missing:

@@ -13,7 +13,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_NAME, APP_VERSION, DEVELOPER_NAME
-from .dependencies import latest_yt_dlp_version, previous_yt_dlp_path, rollback_yt_dlp, update_deno, update_yt_dlp
+from .dependencies import is_flatpak, latest_yt_dlp_version, previous_yt_dlp_path, rollback_yt_dlp, update_deno, update_yt_dlp
 from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import config_dir, state_dir
 from .queue import QueueItem, QueueManager
@@ -608,7 +608,7 @@ class FetchWindow(Adw.ApplicationWindow):
             raise ValueError(f"Custom yt-dlp arguments have unmatched quotes: {error}") from error
         use_cookies = bool(self.settings.values.get("use_cookies", False))
         cookies_file = str(self.settings.values.get("cookies_file", "")) if use_cookies else ""
-        browser_cookies = str(self.settings.values.get("browser_cookies", "")) if use_cookies and not cookies_file else ""
+        browser_cookies = str(self.settings.values.get("browser_cookies", "")) if use_cookies and not cookies_file and not is_flatpak() else ""
         use_archive = bool(self.settings.values.get("download_archive", False))
         return {
             "use_yt_dlp_config": bool(self.settings.values.get("use_yt_dlp_config", False)),
@@ -942,6 +942,12 @@ class SettingsWindow(Adw.PreferencesWindow):
         saved_browser = str(settings.values.get("browser_cookies", ""))
         browser_row.set_selected(browser_map.index(saved_browser) if saved_browser in browser_map else 0)
         browser_row.connect("notify::selected", self._browser_cookies_changed, browser_map)
+        if is_flatpak():
+            browser_row.set_sensitive(False)
+            cookie_group.add(Adw.ActionRow(
+                title="Browser cookies unavailable",
+                subtitle="Flatpak cannot read browser profiles by default. Import a cookies.txt file above instead.",
+            ))
         cookie_group.add(browser_row)
         cookie_group.add(Adw.ActionRow(
             title="Cookie storage",
