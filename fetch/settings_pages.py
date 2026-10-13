@@ -107,6 +107,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         privacy = Adw.PreferencesPage(title="Privacy & Security", icon_name="channel-secure-symbolic")
         privacy_group = Adw.PreferencesGroup(title="Sign In")
         cookies = Adw.PreferencesPage(title="Cookies", icon_name="channel-secure-symbolic")
+        self._add_back_navigation(cookies, "Privacy & Security")
         cookie_group = Adw.PreferencesGroup(
             title="Account Cookies",
             description="Use an exported cookies.txt file for sign-in or age-gated media. Fetch keeps the imported file in your private app settings folder.",
@@ -234,6 +235,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.add(engine)
 
         advanced = Adw.PreferencesPage(title="Advanced", icon_name="preferences-other-symbolic")
+        self._add_back_navigation(advanced, "Engine")
         advanced_group = Adw.PreferencesGroup(
             title="Engine Options",
             description="These options are captured when you add a download to the queue. The Command action shows the exact invocation.",
@@ -341,6 +343,23 @@ class SettingsWindow(Adw.PreferencesWindow):
     def _restore_subpage(self, page: Adw.NavigationPage) -> bool:
         self.push_subpage(page)
         return GLib.SOURCE_REMOVE
+
+    def _add_back_navigation(self, page: Adw.PreferencesPage, parent_name: str) -> None:
+        navigation_group = Adw.PreferencesGroup()
+        row = Adw.ActionRow(title=f"Return to {parent_name}")
+        back_button = Gtk.Button(valign=Gtk.Align.CENTER)
+        button_content = Gtk.Box(spacing=6)
+        button_content.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
+        button_content.append(Gtk.Label(label="Back"))
+        back_button.set_child(button_content)
+        back_button.connect("clicked", self._return_from_subpage, parent_name)
+        row.add_suffix(back_button)
+        navigation_group.add(row)
+        page.add(navigation_group)
+
+    def _return_from_subpage(self, _button: Gtk.Button, parent_name: str) -> None:
+        self.settings.set("settings_page", parent_name)
+        self.pop_subpage()
 
     def _load_versions(self) -> None:
         versions = {name: binary_version(name) for name in ("yt-dlp", "ffmpeg", "ffprobe", "deno")}
