@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import shlex
+import time
 from pathlib import Path
 
 import gi
@@ -12,7 +13,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_NAME, APP_VERSION, DEVELOPER_NAME
-from .dependencies import update_deno, update_yt_dlp
+from .dependencies import latest_yt_dlp_version, previous_yt_dlp_path, rollback_yt_dlp, update_deno, update_yt_dlp
 from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import config_dir, state_dir
 from .queue import QueueItem, QueueManager
@@ -101,6 +102,16 @@ class FetchWindow(Adw.ApplicationWindow):
         intro.append(description)
         content.append(intro)
 
+        self.update_banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.update_banner.add_css_class("card")
+        self.update_banner_label = Gtk.Label(label="", xalign=0, hexpand=True, wrap=True)
+        self.update_banner_button = Gtk.Button(label="Update yt-dlp", valign=Gtk.Align.CENTER)
+        self.update_banner_button.connect("clicked", self._update_from_banner)
+        self.update_banner.append(self.update_banner_label)
+        self.update_banner.append(self.update_banner_button)
+        self.update_banner.set_visible(False)
+        content.append(self.update_banner)
+
         url_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.url_entry = Gtk.Entry(hexpand=True, placeholder_text="Paste a URL")
         self.url_entry.set_activates_default(True)
@@ -176,6 +187,7 @@ class FetchWindow(Adw.ApplicationWindow):
         engine_row.append(self.engine_label)
         content.append(engine_row)
         self._update_engine_summary()
+        self._check_yt_dlp_update()
 
     def _close_requested(self, *_args: object) -> bool:
         self._shutdown = True
@@ -244,6 +256,64 @@ class FetchWindow(Adw.ApplicationWindow):
             GLib.idle_add(self.engine_label.set_text, f"yt-dlp {version}" if version else "yt-dlp isn’t installed")
 
         threading.Thread(target=work, name="fetch-version-summary", daemon=True).start()
+
+    def _check_yt_dlp_update(self) -> None:
+        if not self.settings.values.get("auto_check_yt_dlp", True):
+            return
+        now = int(time.time())
+        last_check = int(self.settings.values.get("last_yt_dlp_check", 0))
+        if now - last_check < 24 * 60 * 60:
+            return
+        self.settings.set("last_yt_dlp_check", now)
+        channel = str(self.settings.values.get("yt_dlp_channel", "stable"))
+
+        def work() -> None:
+            try:
+                latest = latest_yt_dlp_version(channel)
+                current = binary_version("yt-dlp")
+                latest_key = tuple(int(value) for value in latest.split(".") if value.isdigit())
+                current_key = tuple(int(value) for value in (current or "").split(".") if value.isdigit())
+                if current_key and latest_key > current_key:
+                    GLib.idle_add(self._show_update_banner, latest)
+            except Exception:
+                return
+
+        threading.Thread(target=work, name="fetch-update-check", daemon=True).start()
+
+    def _show_update_banner(self, version: str) -> bool:
+        self._available_yt_dlp_version = version
+        self.update_banner_label.set_text(f"yt-dlp {version} is available.")
+        self.update_banner_button.set_sensitive(True)
+        self.update_banner_button.set_label("Update yt-dlp")
+        self.update_banner.set_visible(True)
+        return GLib.SOURCE_REMOVE
+
+    def _update_from_banner(self, _button: Gtk.Button) -> None:
+        if not getattr(self, "_available_yt_dlp_version", ""):
+            return
+        channel = str(self.settings.values.get("yt_dlp_channel", "stable"))
+        self.update_banner_button.set_sensitive(False)
+        self.update_banner_button.set_label("Updating…")
+
+        def work() -> None:
+            try:
+                version, _changed = update_yt_dlp(channel)
+                GLib.idle_add(self._banner_update_finished, version, None)
+            except Exception as error:
+                GLib.idle_add(self._banner_update_finished, "", str(error))
+
+        threading.Thread(target=work, name="fetch-banner-update", daemon=True).start()
+
+    def _banner_update_finished(self, version: str, error: str | None) -> bool:
+        if error:
+            self.update_banner_label.set_text(f"Couldn’t update yt-dlp: {error}")
+            self.update_banner_button.set_sensitive(True)
+            self.update_banner_button.set_label("Try Again")
+        else:
+            self.update_banner.set_visible(False)
+            self.status_label.set_text(f"yt-dlp {version} is installed.")
+            self._update_engine_summary()
+        return GLib.SOURCE_REMOVE
 
     def _inspect(self, *_args: object) -> None:
         url = self.url_entry.get_text().strip()
@@ -724,7 +794,7 @@ class FetchWindow(Adw.ApplicationWindow):
 
             def work() -> None:
                 try:
-                    version, _changed = update_yt_dlp()
+                    version, _changed = update_yt_dlp(str(self.settings.values.get("yt_dlp_channel", "stable")))
                     message = f"yt-dlp {version} is ready; retrying the download."
                     GLib.idle_add(self._retry_after_engine_update, item_id, message, None)
                 except Exception as error:
@@ -902,6 +972,22 @@ class SettingsWindow(Adw.PreferencesWindow):
         )
         self.engine_version_row = Adw.ActionRow(title="Active version", subtitle="Checking…")
         engine_group.add(self.engine_version_row)
+        self._add_switch(
+            engine_group,
+            "Check for yt-dlp Updates",
+            "Look for a newer release at most once every 24 hours when Fetch launches.",
+            "auto_check_yt_dlp",
+        )
+        self.yt_dlp_channels = ("stable", "nightly")
+        self.yt_dlp_channel_row = Adw.ComboRow(
+            title="Update Channel",
+            subtitle="Stable is recommended; Nightly receives newer extractor changes sooner.",
+            model=Gtk.StringList.new(["Stable", "Nightly"]),
+        )
+        saved_channel = str(settings.values.get("yt_dlp_channel", "stable"))
+        self.yt_dlp_channel_row.set_selected(self.yt_dlp_channels.index(saved_channel) if saved_channel in self.yt_dlp_channels else 0)
+        self.yt_dlp_channel_row.connect("notify::selected", self._yt_dlp_channel_changed)
+        engine_group.add(self.yt_dlp_channel_row)
         update_row = Adw.ActionRow(
             title="Update yt-dlp",
             subtitle="Check the official release and install it after verifying its SHA-256 checksum.",
@@ -912,6 +998,17 @@ class SettingsWindow(Adw.PreferencesWindow):
         update_row.add_suffix(self.update_button)
         engine_group.add(update_row)
         engine_group.add(self.update_feedback)
+        rollback_row = Adw.ActionRow(
+            title="Roll Back yt-dlp",
+            subtitle="Restore the previously installed Fetch-managed version.",
+        )
+        self.rollback_feedback = Gtk.Label(label="", xalign=1, wrap=True)
+        self.rollback_button = Gtk.Button(label="Roll Back", valign=Gtk.Align.CENTER)
+        self.rollback_button.set_sensitive(previous_yt_dlp_path().is_file())
+        self.rollback_button.connect("clicked", self._rollback_yt_dlp)
+        rollback_row.add_suffix(self.rollback_button)
+        engine_group.add(rollback_row)
+        engine_group.add(self.rollback_feedback)
         engine.add(engine_group)
 
         dependency_group = Adw.PreferencesGroup(
@@ -1118,6 +1215,10 @@ class SettingsWindow(Adw.PreferencesWindow):
     def _switch_changed(self, switch: Gtk.Switch, _param: object, key: str) -> None:
         self.settings.set(key, switch.get_active())
 
+    def _yt_dlp_channel_changed(self, row: Adw.ComboRow, _param: object) -> None:
+        index = min(row.get_selected(), len(self.yt_dlp_channels) - 1)
+        self.settings.set("yt_dlp_channel", self.yt_dlp_channels[index])
+
     def _settings_page_changed(self, window: Adw.PreferencesWindow, _param: object) -> None:
         page_name = window.get_visible_page_name()
         if page_name:
@@ -1214,7 +1315,7 @@ class SettingsWindow(Adw.PreferencesWindow):
 
         def work() -> None:
             try:
-                version, changed = update_yt_dlp()
+                version, changed = update_yt_dlp(str(self.settings.values.get("yt_dlp_channel", "stable")))
                 message = f"Updated to {version}." if changed else f"yt-dlp {version} is already current."
                 GLib.idle_add(self._update_finished, version, message, None)
             except Exception as error:
@@ -1225,6 +1326,29 @@ class SettingsWindow(Adw.PreferencesWindow):
     def _update_finished(self, version: str, message: str, error: str | None) -> bool:
         self.update_button.set_sensitive(True)
         self.update_feedback.set_text(error or message)
+        self.rollback_button.set_sensitive(previous_yt_dlp_path().is_file())
+        if version:
+            self.engine_version_row.set_subtitle(version)
+            self.about_version_rows["yt-dlp"].set_subtitle(version)
+            self.parent_window._update_engine_summary()
+        return GLib.SOURCE_REMOVE
+
+    def _rollback_yt_dlp(self, _button: Gtk.Button) -> None:
+        self.rollback_button.set_sensitive(False)
+        self.rollback_feedback.set_text("Restoring the previous yt-dlp…")
+
+        def work() -> None:
+            try:
+                version = rollback_yt_dlp()
+                GLib.idle_add(self._rollback_finished, version, None)
+            except Exception as error:
+                GLib.idle_add(self._rollback_finished, "", str(error))
+
+        threading.Thread(target=work, name="fetch-engine-rollback", daemon=True).start()
+
+    def _rollback_finished(self, version: str, error: str | None) -> bool:
+        self.rollback_feedback.set_text(error or f"Restored yt-dlp {version}.")
+        self.rollback_button.set_sensitive(previous_yt_dlp_path().is_file())
         if version:
             self.engine_version_row.set_subtitle(version)
             self.about_version_rows["yt-dlp"].set_subtitle(version)

@@ -20,6 +20,9 @@ class Settings:
             "queue_concurrency": 2,
             "quality_preference": "compatible",
             "max_resolution": "",
+            "auto_check_yt_dlp": True,
+            "yt_dlp_channel": "stable",
+            "last_yt_dlp_check": 0,
             "cookies_file": "",
             "use_cookies": False,
             "browser_cookies": "",
@@ -58,6 +61,12 @@ class Settings:
                     self.values["quality_preference"] = loaded["quality_preference"]
                 if isinstance(loaded.get("max_resolution"), str) and loaded["max_resolution"] in {"", "2160", "1440", "1080", "720", "480"}:
                     self.values["max_resolution"] = loaded["max_resolution"]
+                if isinstance(loaded.get("auto_check_yt_dlp"), bool):
+                    self.values["auto_check_yt_dlp"] = loaded["auto_check_yt_dlp"]
+                if isinstance(loaded.get("yt_dlp_channel"), str) and loaded["yt_dlp_channel"] in {"stable", "nightly"}:
+                    self.values["yt_dlp_channel"] = loaded["yt_dlp_channel"]
+                if isinstance(loaded.get("last_yt_dlp_check"), (int, float)):
+                    self.values["last_yt_dlp_check"] = int(loaded["last_yt_dlp_check"])
                 for key in (
                     "use_cookies", "use_yt_dlp_config", "download_archive", "sponsorblock",
                     "embed_metadata", "embed_thumbnail", "include_media_id", "clear_queue_on_exit",
