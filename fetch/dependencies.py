@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import io
@@ -15,8 +14,9 @@ from . import APP_VERSION
 from .paths import data_dir
 
 
-GITHUB_RELEASES = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest"
-DENO_RELEASES = "https://api.github.com/repos/denoland/deno/releases/latest"
+YT_DLP_BINARY_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+YT_DLP_CHECKSUMS_URL = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS"
+DENO_LATEST_URL = "https://github.com/denoland/deno/releases/latest/download/{}"
 
 
 def managed_yt_dlp_path() -> Path:
@@ -29,35 +29,19 @@ def managed_deno_path() -> Path:
 
 def update_yt_dlp() -> tuple[str, bool]:
     """Install the latest official Linux-friendly zipimport release in user data."""
-    release = _get_json(GITHUB_RELEASES)
-    tag = str(release.get("tag_name") or "").removeprefix("v")
-    if not tag:
-        raise RuntimeError("GitHub did not return a yt-dlp release version.")
-
-    assets = release.get("assets")
-    if not isinstance(assets, list):
-        raise RuntimeError("GitHub did not return the release files.")
-    binary = next((asset for asset in assets if isinstance(asset, dict) and asset.get("name") == "yt-dlp"), None)
-    checksums = next(
-        (asset for asset in assets if isinstance(asset, dict) and asset.get("name") == "SHA2-256SUMS"),
-        None,
-    )
-    if not binary or not binary.get("browser_download_url"):
-        raise RuntimeError("The official release does not include the Linux yt-dlp executable.")
+    tag = _latest_release_tag(YT_DLP_BINARY_URL)
 
     path = managed_yt_dlp_path()
     current = _binary_version(path) if path.is_file() else None
     if current == tag:
         return tag, False
 
-    expected = _release_digest(binary)
-    if not expected and checksums and checksums.get("browser_download_url"):
-        checksum_text = _get_bytes(str(checksums["browser_download_url"]), limit=2_000_000).decode("utf-8", "replace")
-        expected = _checksum_for_file(checksum_text, "yt-dlp")
+    checksum_text = _get_bytes(YT_DLP_CHECKSUMS_URL, limit=2_000_000).decode("utf-8", "replace")
+    expected = _checksum_for_file(checksum_text, "yt-dlp")
     if not expected:
         raise RuntimeError("Fetch couldn’t verify the release checksum, so it left yt-dlp unchanged.")
 
-    payload = _get_bytes(str(binary["browser_download_url"]), limit=20_000_000)
+    payload = _get_bytes(YT_DLP_BINARY_URL, limit=20_000_000)
     actual = hashlib.sha256(payload).hexdigest()
     if actual.lower() != expected.lower():
         raise RuntimeError("The downloaded yt-dlp file did not match its published SHA-256 checksum.")
@@ -86,27 +70,18 @@ def update_deno() -> tuple[str, bool]:
     }.get(architecture)
     if not asset_name:
         raise RuntimeError(f"Fetch’s Deno installer doesn’t support this architecture yet: {architecture}.")
-    release = _get_json(DENO_RELEASES)
-    tag = str(release.get("tag_name") or "").removeprefix("v")
-    assets = release.get("assets")
-    if not tag or not isinstance(assets, list):
-        raise RuntimeError("GitHub did not return a Deno release.")
-    asset = next((item for item in assets if isinstance(item, dict) and item.get("name") == asset_name), None)
-    checksum_asset = next(
-        (item for item in assets if isinstance(item, dict) and item.get("name") == asset_name + ".sha256sum"),
-        None,
-    )
-    if not asset or not asset.get("browser_download_url") or not checksum_asset or not checksum_asset.get("browser_download_url"):
-        raise RuntimeError("The official Deno release is missing its runtime or checksum file.")
+    asset_url = DENO_LATEST_URL.format(asset_name)
+    checksum_url = DENO_LATEST_URL.format(asset_name + ".sha256sum")
+    tag = _latest_release_tag(asset_url)
     path = managed_deno_path()
     current = _deno_version(path) if path.is_file() else None
     if current == tag:
         return tag, False
-    checksum_text = _get_bytes(str(checksum_asset["browser_download_url"]), limit=4096).decode("utf-8", "replace")
+    checksum_text = _get_bytes(checksum_url, limit=4096).decode("utf-8", "replace")
     match = re.search(r"[0-9a-fA-F]{64}", checksum_text)
     if not match:
         raise RuntimeError("Fetch couldn’t read Deno’s published SHA-256 checksum.")
-    payload = _get_bytes(str(asset["browser_download_url"]), limit=200_000_000)
+    payload = _get_bytes(asset_url, limit=200_000_000)
     if hashlib.sha256(payload).hexdigest().lower() != match.group(0).lower():
         raise RuntimeError("The Deno download did not match its published SHA-256 checksum.")
     try:
@@ -131,25 +106,39 @@ def update_deno() -> tuple[str, bool]:
     return tag, True
 
 
-def _release_digest(asset: dict[str, object]) -> str | None:
-    value = asset.get("digest")
-    if isinstance(value, str) and value.startswith("sha256:"):
-        return value.split(":", 1)[1]
-    return None
-
-
 def _checksum_for_file(payload: str, filename: str) -> str | None:
     escaped = re.escape(filename)
     match = re.search(rf"^([0-9a-fA-F]{{64}})\s+\*?{escaped}\s*$", payload, re.MULTILINE)
     return match.group(1) if match else None
 
 
-def _get_json(url: str) -> dict[str, object]:
-    payload = _get_bytes(url, limit=8_000_000, accept="application/vnd.github+json")
-    value = json.loads(payload.decode("utf-8"))
-    if not isinstance(value, dict):
-        raise RuntimeError("GitHub returned an unexpected release response.")
-    return value
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _latest_release_tag(url: str) -> str:
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": f"Fetch/{APP_VERSION}"},
+        method="HEAD",
+    )
+    opener = urllib.request.build_opener(_NoRedirect)
+    try:
+        response = opener.open(request, timeout=40)
+    except urllib.error.HTTPError as response:
+        location = response.headers.get("Location", "")
+        if response.code not in {301, 302, 303, 307, 308} or not location:
+            raise RuntimeError(f"Fetch couldn’t determine the latest release from {url}.") from response
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        raise RuntimeError(f"Fetch couldn’t reach the official release service: {error}") from error
+    else:
+        response.close()
+        raise RuntimeError(f"The official release link did not redirect to a versioned asset: {url}.")
+    match = re.search(r"/releases/download/([^/]+)/", location)
+    if not match:
+        raise RuntimeError("The official release redirect did not contain a version tag.")
+    return match.group(1).removeprefix("v")
 
 
 def _get_bytes(url: str, *, limit: int, accept: str = "application/octet-stream") -> bytes:
