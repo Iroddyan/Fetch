@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import threading
 import time
+from urllib.parse import parse_qs, urlsplit
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -101,7 +102,14 @@ def _base_args(options: dict[str, object] | None = None) -> list[str]:
     if proxy:
         args.extend(["--proxy", proxy])
     args.extend(["--retries", str(max(0, min(100, int(options.get("retry_count", 10) or 0))))])
+    if bool(options.get("no_playlist", False)):
+        args.append("--no-playlist")
     return args
+
+
+def _is_video_playlist_url(url: str) -> bool:
+    query = parse_qs(urlsplit(url).query)
+    return bool(query.get("v", [""])[0] and query.get("list", [""])[0])
 
 
 def inspect_url(
@@ -232,6 +240,7 @@ def download_url(
     proxy: str = "",
     rate_limit: str = "",
     retry_count: int = 10,
+    no_playlist: bool = False,
     archive_file: str = "",
     sponsorblock: bool = False,
     embed_metadata: bool = True,
@@ -250,6 +259,7 @@ def download_url(
         "browser_cookies": browser_cookies,
         "proxy": proxy,
         "retry_count": retry_count,
+        "no_playlist": no_playlist,
     }
     if audio_format:
         filename_template = "%(artist,creator,uploader,channel|Unknown Artist)s - %(title)s"

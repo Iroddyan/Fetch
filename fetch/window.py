@@ -13,7 +13,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_NAME, APP_VERSION, DEVELOPER_NAME
 from .dependencies import update_deno, update_yt_dlp
-from .engine import EngineError, FormatInfo, MediaInfo, binary_version, find_binary, inspect_url
+from .engine import EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import config_dir, state_dir
 from .queue import QueueItem, QueueManager
 from .settings import Settings
@@ -103,6 +103,7 @@ class FetchWindow(Adw.ApplicationWindow):
         self.url_entry = Gtk.Entry(hexpand=True, placeholder_text="Paste a URL")
         self.url_entry.set_activates_default(True)
         self.url_entry.connect("activate", self._inspect)
+        self.url_entry.connect("changed", self._url_changed)
         self.inspect_button = Gtk.Button(label="Inspect", css_classes=["suggested-action"])
         self.inspect_button.connect("clicked", self._inspect)
         url_row.append(self.url_entry)
@@ -112,6 +113,11 @@ class FetchWindow(Adw.ApplicationWindow):
         self.cancel_inspect_button.set_visible(False)
         url_row.append(self.cancel_inspect_button)
         content.append(url_row)
+        self.single_video_check = Gtk.CheckButton(label="Single video only")
+        self.single_video_check.set_visible(False)
+        content.append(self.single_video_check)
+        self._single_video_overridden = False
+        self.single_video_check.connect("toggled", self._single_video_toggled)
 
         self.status_label = Gtk.Label(label="", xalign=0, wrap=True, selectable=True)
         self.status_label.add_css_class("dim-label")
@@ -234,10 +240,17 @@ class FetchWindow(Adw.ApplicationWindow):
         self.status_label.remove_css_class("error")
         self.status_label.add_css_class("dim-label")
         self.status_label.set_text("Inspecting link…")
+        try:
+            inspect_options = self._advanced_options()
+        except ValueError as error:
+            self._show_error(str(error))
+            self.inspect_button.set_sensitive(True)
+            self.cancel_inspect_button.set_visible(False)
+            return
 
         def work() -> None:
             try:
-                info, thumbnail = inspect_url(url, self._advanced_options(), cancel_event=cancel_event)
+                info, thumbnail = inspect_url(url, inspect_options, cancel_event=cancel_event)
                 GLib.idle_add(self._show_media, info, thumbnail)
             except EngineError as error:
                 if cancel_event.is_set():
@@ -250,6 +263,16 @@ class FetchWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self._finish_inspection)
 
         threading.Thread(target=work, name="fetch-inspect", daemon=True).start()
+
+    def _url_changed(self, entry: Gtk.Entry) -> None:
+        is_mixed_url = _is_video_playlist_url(entry.get_text().strip())
+        self.single_video_check.set_visible(is_mixed_url)
+        self._single_video_overridden = False
+        self.single_video_check.set_active(is_mixed_url)
+        self._single_video_overridden = False
+
+    def _single_video_toggled(self, _check: Gtk.CheckButton) -> None:
+        self._single_video_overridden = True
 
     def _cancel_inspection(self, _button: Gtk.Button) -> None:
         if self._inspect_cancel_event:
@@ -500,6 +523,7 @@ class FetchWindow(Adw.ApplicationWindow):
             "embed_metadata": bool(self.settings.values.get("embed_metadata", True)),
             "embed_thumbnail": bool(self.settings.values.get("embed_thumbnail", True)),
             "include_media_id": bool(self.settings.values.get("include_media_id", False)),
+            "no_playlist": self.single_video_check.get_active(),
             "custom_arguments": custom_arguments,
         }
 
