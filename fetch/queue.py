@@ -35,6 +35,8 @@ class QueueItem:
     eta: str = ""
     attempt: int = 0
     error: str = ""
+    error_hint: str = ""
+    error_action: str = "none"
     command: str = ""
     logs: list[str] = field(default_factory=list)
     updated_at: float = field(default_factory=time.time)
@@ -166,6 +168,8 @@ class QueueManager:
             item.playlist_count = None
             item.stage = ""
             item.error = ""
+            item.error_hint = ""
+            item.error_action = "none"
             item.logs = []
             item.attempt += 1
             item.updated_at = time.time()
@@ -379,7 +383,10 @@ class QueueManager:
                     else:
                         item.status = "failed"
                         details = "\n".join(item.logs[-15:]) or f"yt-dlp exited with status {code}."
-                        item.error = _friendly_error(details)
+                        error_details = _friendly_error(details)
+                        item.error = error_details.message
+                        item.error_hint = error_details.hint
+                        item.error_action = error_details.action
                     item.updated_at = time.time()
                 self._cancel_requested.discard(item_id)
                 self._pause_requested.discard(item_id)
@@ -393,7 +400,9 @@ class QueueManager:
                         item.error = ""
                     else:
                         item.status = "interrupted" if self._closed else "failed"
-                        item.error = str(error)
+                        item.error = error.details.message
+                        item.error_hint = error.details.hint
+                        item.error_action = error.details.action
                     item.updated_at = time.time()
                 self._pause_requested.discard(item_id)
                 self._persist_locked()
@@ -407,6 +416,8 @@ class QueueManager:
                     else:
                         item.status = "interrupted" if self._closed else "failed"
                         item.error = f"Fetch couldn’t complete the download: {error}"
+                        item.error_hint = ""
+                        item.error_action = "none"
                     item.updated_at = time.time()
                 self._pause_requested.discard(item_id)
                 self._persist_locked()

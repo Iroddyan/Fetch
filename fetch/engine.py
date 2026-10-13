@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import shutil
 import shlex
@@ -19,8 +20,20 @@ from .dependencies import managed_deno_path, managed_yt_dlp_path
 from .paths import cache_dir
 
 
+@dataclass
+class ErrorDetails:
+    message: str
+    hint: str = ""
+    action: str = "none"
+
+    def __str__(self) -> str:
+        return f"{self.message}\n\n{self.hint}" if self.hint else self.message
+
+
 class EngineError(RuntimeError):
-    pass
+    def __init__(self, message: str | ErrorDetails) -> None:
+        self.details = message if isinstance(message, ErrorDetails) else ErrorDetails(str(message))
+        super().__init__(str(self.details))
 
 
 @dataclass
@@ -442,20 +455,32 @@ def _format_list(raw_formats: object) -> list[FormatInfo]:
     return formatted
 
 
-def _friendly_error(raw: str) -> str:
-    message = raw.strip() or "yt-dlp couldn’t inspect this link."
+def _friendly_error(raw: str) -> ErrorDetails:
+    text = raw.strip() or "yt-dlp couldn’t complete this request."
+    errors = re.findall(r"^\s*ERROR:\s*(.+?)\s*$", text, flags=re.IGNORECASE | re.MULTILINE)
+    message = "\n".join(errors) if errors else text
     lowered = message.lower()
-    if "sign in to confirm" in lowered or "age-restricted" in lowered or "age restricted" in lowered:
-        return f"{message}\n\nThis media may require account cookies. Import a cookies.txt file or choose a browser under Settings → Cookies."
-    if "ffmpeg" in lowered and ("not found" in lowered or "not installed" in lowered or "merg" in lowered):
-        return f"{message}\n\nInstall ffmpeg and ffprobe to merge separate video and audio streams."
+    if re.search(r"\bHTTP\s+Error\s+429\b", message, re.IGNORECASE):
+        return ErrorDetails(message, "The site is limiting requests. Wait before retrying, or try importing account cookies.", "import_cookies")
+    if any(term in lowered for term in ("members-only", "members only", "sign in to confirm", "login required", "age-restricted", "age restricted")):
+        return ErrorDetails(message, "This media may require account cookies. Import a cookies.txt file or choose a browser under Settings → Cookies.", "import_cookies")
+    if re.search(r"\bHTTP\s+Error\s+403\b", message, re.IGNORECASE) or any(
+        term in lowered for term in ("unable to extract", "extractor error", "unsupported url")
+    ):
+        return ErrorDetails(message, "The site may have changed. Update yt-dlp, then retry.", "update_ytdlp")
+    if any(term in lowered for term in ("private video", "video is private", "video unavailable", "has been removed", "unavailable video")):
+        return ErrorDetails(message, "The video may be private, deleted, or unavailable to this account or link.")
+    if any(term in lowered for term in ("geo-restricted", "geo restricted", "not available in your country", "blocked in your country")):
+        return ErrorDetails(message, "This media is restricted in your current region.")
+    if "requested format is not available" in lowered:
+        return ErrorDetails(message, "Choose another format or switch Quality Preference to Best quality.")
+    if "ffmpeg" in lowered and any(term in lowered for term in ("not found", "not installed", "merg", "required")):
+        return ErrorDetails(message, "Install ffmpeg and ffprobe to merge or convert media.", "install_ffmpeg")
     if "no supported javascript runtime" in lowered or "js runtime" in lowered:
-        return f"{message}\n\nInstall Deno 2.3 or later from Engine settings for full YouTube support."
-    if "yt-dlp-ejs" in lowered or "ejs" in lowered and "not found" in lowered:
-        return f"{message}\n\nUpdate yt-dlp or install its matching yt-dlp-ejs scripts from Engine settings."
-    if "403" in lowered or "extractor" in lowered or "unsupported url" in lowered:
-        return f"{message}\n\nCheck the link and update yt-dlp in Settings → Engine if this site recently changed."
-    return message
+        return ErrorDetails(message, "Install Deno 2.3 or later from Engine settings for full YouTube support.")
+    if "yt-dlp-ejs" in lowered or ("ejs" in lowered and "not found" in lowered):
+        return ErrorDetails(message, "Update yt-dlp or install its matching yt-dlp-ejs scripts from Engine settings.", "update_ytdlp")
+    return ErrorDetails(message)
 
 
 def _to_int(value: object) -> int | None:

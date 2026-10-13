@@ -13,7 +13,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_NAME, APP_VERSION, DEVELOPER_NAME
 from .dependencies import update_deno, update_yt_dlp
-from .engine import EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
+from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import config_dir, state_dir
 from .queue import QueueItem, QueueManager
 from .settings import Settings
@@ -59,6 +59,8 @@ class FetchWindow(Adw.ApplicationWindow):
         self._shutdown = False
         self._inspect_cancel_event: threading.Event | None = None
         self._last_job_states: dict[str, str] = {}
+        self._updating_items: set[str] = set()
+        self._inspect_error_details: ErrorDetails | None = None
         self._last_clipboard_url = ""
         self._clipboard_source_id: int | None = None
         self.queue_manager = QueueManager(lambda: settings.download_directory, settings.queue_concurrency)
@@ -122,6 +124,10 @@ class FetchWindow(Adw.ApplicationWindow):
         self.status_label = Gtk.Label(label="", xalign=0, wrap=True, selectable=True)
         self.status_label.add_css_class("dim-label")
         content.append(self.status_label)
+        self.inspect_error_action_button = Gtk.Button(label="", halign=Gtk.Align.START)
+        self.inspect_error_action_button.set_visible(False)
+        self.inspect_error_action_button.connect("clicked", self._inspect_error_action)
+        content.append(self.inspect_error_action_button)
 
         self.clipboard_revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
         clipboard_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
@@ -209,8 +215,26 @@ class FetchWindow(Adw.ApplicationWindow):
             self.clipboard_revealer.set_reveal_child(False)
             self._inspect()
 
-    def _open_settings(self, _button: Gtk.Button) -> None:
-        SettingsWindow(self, self.settings, self.queue_manager).present()
+    def _open_settings(self, _button: Gtk.Button | None = None) -> None:
+        self._open_settings_page("")
+
+    def _open_settings_page(self, page: str) -> SettingsWindow:
+        window = SettingsWindow(self, self.settings, self.queue_manager)
+        self.settings_window = window
+        window.present()
+        root_pages = {
+            "Downloads": "downloads", "Media": "media", "Privacy & Security": "privacy",
+            "Cookies": "privacy", "Engine": "engine", "Appearance": "appearance",
+            "Notifications": "notifications", "About": "about",
+        }
+        if page:
+            window.set_visible_page_name(root_pages.get(page, page.lower()))
+        if page == "Cookies":
+            window.push_subpage(window._cookies_subpage)
+        elif page == "Advanced":
+            window.set_visible_page_name("engine")
+            window.push_subpage(window._advanced_subpage)
+        return window
 
     def _update_engine_summary(self) -> None:
         self.engine_label.set_text("Checking yt-dlp…")
@@ -229,6 +253,8 @@ class FetchWindow(Adw.ApplicationWindow):
             return
         self.media_url = None
         self.media_info = None
+        self._inspect_error_details = None
+        self.inspect_error_action_button.set_visible(False)
         self.add_queue_button.set_visible(False)
         self.media_card.set_child(None)
         self.inspect_button.set_sensitive(False)
@@ -256,9 +282,9 @@ class FetchWindow(Adw.ApplicationWindow):
                 if cancel_event.is_set():
                     GLib.idle_add(self._inspection_cancelled)
                 else:
-                    GLib.idle_add(self._show_error, str(error))
+                    GLib.idle_add(self._show_error, error.details)
             except Exception as error:
-                GLib.idle_add(self._show_error, f"Fetch couldn’t inspect this link: {error}")
+                GLib.idle_add(self._show_error, ErrorDetails(f"Fetch couldn’t inspect this link: {error}"))
             finally:
                 GLib.idle_add(self._finish_inspection)
 
@@ -322,6 +348,7 @@ class FetchWindow(Adw.ApplicationWindow):
         card.set_child(body)
         self.media_card.set_child(card)
         self.status_label.set_text("Choose your options, then add to the queue.")
+        self.inspect_error_action_button.set_visible(False)
         self.add_queue_button.set_label("Add Selected to Queue" if info.is_playlist else "Add to Queue")
         self.add_queue_button.set_visible(True)
         self.add_queue_button.set_sensitive(True)
@@ -551,11 +578,35 @@ class FetchWindow(Adw.ApplicationWindow):
         self.status_label.add_css_class("dim-label")
         self.status_label.set_text("Added to the queue.")
 
-    def _show_error(self, message: str) -> bool:
+    def _show_error(self, message: str | ErrorDetails) -> bool:
+        details = message if isinstance(message, ErrorDetails) else ErrorDetails(message)
         self.status_label.remove_css_class("dim-label")
         self.status_label.add_css_class("error")
-        self.status_label.set_text(message)
+        self.status_label.set_text("\n\n".join(part for part in (details.message, details.hint) if part))
+        self._inspect_error_details = details
+        self.inspect_error_action_button.set_label(self._error_action_label(details.action))
+        self.inspect_error_action_button.set_visible(details.action != "none")
         return GLib.SOURCE_REMOVE
+
+    @staticmethod
+    def _error_action_label(action: str) -> str:
+        return {
+            "update_ytdlp": "Update yt-dlp…",
+            "import_cookies": "Open Cookie Settings…",
+            "install_ffmpeg": "Show ffmpeg Install Hint",
+        }.get(action, "")
+
+    def _inspect_error_action(self, _button: Gtk.Button) -> None:
+        details = self._inspect_error_details
+        if not details:
+            return
+        if details.action == "import_cookies":
+            self._open_settings_page("Cookies")
+        elif details.action == "update_ytdlp":
+            window = self._open_settings_page("Engine")
+            window._update_yt_dlp(self.inspect_error_action_button)
+        elif details.action == "install_ffmpeg":
+            self.status_label.set_text(details.hint)
 
     def _render_queue(self, items: list[QueueItem]) -> bool:
         if self._shutdown:
@@ -617,6 +668,15 @@ class FetchWindow(Adw.ApplicationWindow):
             error = Gtk.Label(label=item.error, xalign=0, wrap=True, selectable=True)
             error.add_css_class("error")
             layout.append(error)
+        if item.error_hint:
+            hint = Gtk.Label(label=item.error_hint, xalign=0, wrap=True, selectable=True)
+            hint.add_css_class("dim-label")
+            layout.append(hint)
+        if item.error_action != "none":
+            action = Gtk.Button(label=self._error_action_label(item.error_action), halign=Gtk.Align.START)
+            action.set_sensitive(item.id not in self._updating_items)
+            action.connect("clicked", lambda _button, key=item.id: self._queue_error_action(key))
+            layout.append(action)
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         if item.status == "running":
             button = Gtk.Button(label="Pause")
@@ -649,6 +709,38 @@ class FetchWindow(Adw.ApplicationWindow):
         layout.append(buttons)
         row.set_child(layout)
         return row
+
+    def _queue_error_action(self, item_id: str) -> None:
+        item = next((entry for entry in self.queue_manager.items() if entry.id == item_id), None)
+        if not item:
+            return
+        if item.error_action == "import_cookies":
+            self._open_settings_page("Cookies")
+        elif item.error_action == "install_ffmpeg":
+            self.status_label.set_text(item.error_hint)
+        elif item.error_action == "update_ytdlp" and item_id not in self._updating_items:
+            self._updating_items.add(item_id)
+            self.status_label.set_text("Updating yt-dlp before retrying this download…")
+
+            def work() -> None:
+                try:
+                    version, _changed = update_yt_dlp()
+                    message = f"yt-dlp {version} is ready; retrying the download."
+                    GLib.idle_add(self._retry_after_engine_update, item_id, message, None)
+                except Exception as error:
+                    GLib.idle_add(self._retry_after_engine_update, item_id, "", str(error))
+
+            threading.Thread(target=work, name="fetch-retry-after-update", daemon=True).start()
+
+    def _retry_after_engine_update(self, item_id: str, message: str, error: str | None) -> bool:
+        self._updating_items.discard(item_id)
+        if error:
+            self.status_label.set_text(f"Couldn’t update yt-dlp: {error}")
+        else:
+            self.status_label.set_text(message)
+            self.queue_manager.retry(item_id)
+        self._render_queue(self.queue_manager.items())
+        return GLib.SOURCE_REMOVE
 
     def _show_text_window(self, title: str, value: str) -> None:
         window = Gtk.Window(title=title, transient_for=self, modal=True, default_width=720, default_height=500)
