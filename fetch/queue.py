@@ -343,6 +343,7 @@ class QueueManager:
                 retry_count=int(options.get("retry_count") or 0),
                 quality_preference=str(options.get("quality_preference") or "compatible"),
                 max_resolution=str(options.get("max_resolution") or ""),
+                is_playlist=bool(options.get("is_playlist")),
                 archive_file=str(options.get("archive_file") or ""),
                 sponsorblock=bool(options.get("sponsorblock")),
                 embed_metadata=bool(options.get("embed_metadata", True)),

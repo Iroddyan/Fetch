@@ -472,6 +472,7 @@ class FetchWindow(Adw.ApplicationWindow):
             options = {
                 "format_spec": "bestaudio/best" if audio_only else "bestvideo*+bestaudio/best",
                 "audio_format": audio_formats[fmt_idx] if audio_only else "",
+                "is_playlist": True,
                 "playlist_items": playlist_items,
                 "subtitle_languages": subtitles,
                 "embed_subtitles": self.playlist_embed_subtitles_check.get_active(),
@@ -493,6 +494,7 @@ class FetchWindow(Adw.ApplicationWindow):
         options = {
             "format_spec": format_spec,
             "audio_format": audio_formats[audio_index] if audio_only else "",
+            "is_playlist": False,
             "subtitle_languages": self.subtitle_languages_entry.get_text().strip() if self.download_subtitles_check.get_active() else "",
             "embed_subtitles": self.embed_subtitles_check.get_active(),
             "automatic_subtitles": self.auto_subtitles_check.get_active(),

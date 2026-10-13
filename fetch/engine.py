@@ -254,6 +254,7 @@ def download_url(
     no_playlist: bool = False,
     quality_preference: str = "compatible",
     max_resolution: str = "",
+    is_playlist: bool = False,
     archive_file: str = "",
     sponsorblock: bool = False,
     embed_metadata: bool = True,
@@ -274,10 +275,11 @@ def download_url(
         "retry_count": retry_count,
         "no_playlist": no_playlist,
     }
-    if audio_format:
-        filename_template = "%(artist,creator,uploader,channel|Unknown Artist)s - %(title)s"
+    title_template = "%(artist,creator,uploader,channel|Unknown Artist)s - %(title|Untitled)s" if audio_format else "%(title|Untitled)s"
+    if is_playlist:
+        filename_template = "%(playlist_title|Playlist)s/%(playlist_index)03d - " + title_template
     else:
-        filename_template = "%(title)s"
+        filename_template = title_template
     if include_media_id:
         filename_template += " [%(id)s]"
     command.extend(_base_args(base_options))
