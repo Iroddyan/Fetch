@@ -442,6 +442,7 @@ class FetchWindow(Adw.ApplicationWindow):
         self.audio_format_dropdown = Gtk.DropDown(
             model=Gtk.StringList.new(["MP3", "FLAC", "M4A", "Opus"])
         )
+        self.audio_format_dropdown.set_selected(2)
         audio_box.append(self.audio_format_dropdown)
         body.append(audio_box)
         self.audio_only_check.connect("toggled", self._audio_mode_changed)
@@ -522,6 +523,7 @@ class FetchWindow(Adw.ApplicationWindow):
         self.playlist_audio_check = Gtk.CheckButton(label="Audio only")
         options.append(self.playlist_audio_check)
         self.playlist_audio_format = Gtk.DropDown(model=Gtk.StringList.new(["MP3", "FLAC", "M4A", "Opus"]))
+        self.playlist_audio_format.set_selected(2)
         options.append(self.playlist_audio_format)
         body.append(options)
         self.playlist_subtitles_check = Gtk.CheckButton(label="Download subtitles")

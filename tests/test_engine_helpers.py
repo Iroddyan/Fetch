@@ -38,6 +38,15 @@ def test_format_list_deduplicates_and_labels_formats() -> None:
     assert result[1].has_audio and not result[1].has_video
 
 
+def test_playlist_audio_uses_the_standalone_music_filename() -> None:
+    single_track = engine._filename_template(False, "m4a", False)
+    playlist_track = engine._filename_template(True, "m4a", False)
+    assert playlist_track == single_track
+    assert playlist_track == "%(artist,creator,uploader,channel|Unknown Artist)s - %(title|Untitled)s"
+    assert engine._filename_template(True, "m4a", True).endswith(" [%(id)s]")
+    assert engine._filename_template(True, None, False).startswith("%(playlist_title|Playlist)s/%(playlist_index)03d - ")
+
+
 def test_friendly_error_maps_common_errors_and_ignores_incidental_status_digits() -> None:
     cases = [
         ("ERROR: HTTP Error 429: Too Many Requests", "import_cookies"),

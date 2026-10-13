@@ -12,7 +12,7 @@ Fetch **1.1.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets 
 - URL and playlist inspection, thumbnails, media details, format selection, and playlist item selection.
 - Best-quality and audio-only downloads, subtitles, chapters, metadata, thumbnail embedding, and SponsorBlock.
 - Queue with concurrency limits, structured progress, speed and ETA, pause/resume, cancel, retry, and a Clear Queue action. By default, the queue is cleared when Fetch closes; this can be changed in Settings → Downloads.
-- Music downloads default to embedded square artwork and `Artist - Title` filenames without the media ID. Settings → Media lets you change artwork embedding or include IDs.
+- Music downloads default to M4A, embedded square artwork, and `Artist - Title` filenames without the media ID. Playlist music uses the same filenames as standalone tracks. Settings → Media lets you change artwork embedding or include IDs.
 - Direct, checksum-verified updates for the official yt-dlp and Deno Linux builds, independent of app updates. System-provided tools remain supported.
 - Dependency status for yt-dlp, ffmpeg, ffprobe, and Deno, with yt-dlp errors and command logs available from the queue.
 - Cookies.txt import and browser-cookie selection, optional yt-dlp configuration, download archive, proxy and speed limits, retries, and raw yt-dlp arguments.

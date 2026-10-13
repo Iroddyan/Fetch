@@ -137,6 +137,19 @@ def _quality_args(quality_preference: str, max_resolution: str, *, audio_only: b
     return args
 
 
+def _filename_template(is_playlist: bool, audio_format: str | None, include_media_id: bool) -> str:
+    title_template = (
+        "%(artist,creator,uploader,channel|Unknown Artist)s - %(title|Untitled)s"
+        if audio_format else "%(title|Untitled)s"
+    )
+    # Music tracks use the same filename whether downloaded alone or from a playlist.
+    if is_playlist and not audio_format:
+        title_template = "%(playlist_title|Playlist)s/%(playlist_index)03d - " + title_template
+    if include_media_id:
+        title_template += " [%(id)s]"
+    return title_template
+
+
 def inspect_url(
     url: str,
     options: dict[str, object] | None = None,
@@ -308,13 +321,7 @@ def download_url(
         "retry_count": retry_count,
         "no_playlist": no_playlist,
     }
-    title_template = "%(artist,creator,uploader,channel|Unknown Artist)s - %(title|Untitled)s" if audio_format else "%(title|Untitled)s"
-    if is_playlist:
-        filename_template = "%(playlist_title|Playlist)s/%(playlist_index)03d - " + title_template
-    else:
-        filename_template = title_template
-    if include_media_id:
-        filename_template += " [%(id)s]"
+    filename_template = _filename_template(is_playlist, audio_format, include_media_id)
     command.extend(_base_args(base_options))
     command.extend([
         "--no-warnings",
