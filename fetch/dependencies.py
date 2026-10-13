@@ -148,6 +148,9 @@ def rollback_yt_dlp() -> str:
 
 def update_deno() -> tuple[str, bool]:
     """Install a checksum-verified official Deno Linux runtime in user data."""
+    libc_name, _libc_version = platform.libc_ver()
+    if platform.system() == "Linux" and libc_name.lower() != "glibc":
+        raise RuntimeError("Install Deno from your package manager. Fetch’s managed Deno build requires glibc.")
     architecture = platform.machine().lower()
     asset_name = {
         "x86_64": "deno-x86_64-unknown-linux-gnu.zip",
@@ -156,7 +159,9 @@ def update_deno() -> tuple[str, bool]:
         "arm64": "deno-aarch64-unknown-linux-gnu.zip",
     }.get(architecture)
     if not asset_name:
-        raise RuntimeError(f"Fetch’s Deno installer doesn’t support this architecture yet: {architecture}.")
+        raise RuntimeError(
+            f"Install Deno from your package manager. Fetch’s managed Deno build doesn’t support this architecture yet: {architecture}."
+        )
     asset_url = DENO_LATEST_URL.format(asset_name)
     checksum_url = DENO_LATEST_URL.format(asset_name + ".sha256sum")
     tag = _latest_release_tag(asset_url)
