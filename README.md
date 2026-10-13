@@ -48,11 +48,65 @@ Settings apply immediately and are saved under the user's XDG directories:
 
 The initial download location is the system Downloads directory, falling back to `~/Downloads`. Browser-cookie access can require extra filesystem permissions in a Flatpak; importing a cookies.txt file is the portable option.
 
-## Packaging
+## Install and uninstall
 
-The Flatpak manifest is `flatpak/com.iroddyan.fetch.yml`. It uses GNOME Platform; the Freedesktop runtime supplies ffmpeg and ffprobe. The Fedora RPM spec is `packaging/fetch.spec`. The app currently requires network access for media inspection, downloads, and engine updates.
+Fetch can be installed as a locally built Flatpak or as a Fedora RPM. The Flatpak is built from this checkout; no Flathub listing is required. The RPM is intended for Fedora and compatible RPM systems that provide the dependencies listed in `packaging/fetch.spec`.
 
-Build a Fedora RPM from the checkout with `packaging/build-rpm.sh`; the package is written under `~/rpmbuild/RPMS/noarch/` by default. To build and install the Flatpak locally, use `flatpak-builder --user --install --force-clean build-dir flatpak/com.iroddyan.fetch.yml` after installing Flatpak Builder and enabling the GNOME and freedesktop runtimes.
+### Flatpak
+
+Install Flatpak and Flatpak Builder with your distribution’s package manager, then make sure the Flathub remote is configured. From the Fetch checkout, install the GNOME 50 runtime and SDK and build/install Fetch for your user:
+
+```sh
+flatpak install --user flathub org.gnome.Platform//50 org.gnome.Sdk//50
+flatpak-builder --user --install --force-clean build-dir flatpak/com.iroddyan.fetch.yml
+```
+
+The first build may take a while because Flatpak Builder prepares the runtime and SDK. Launch Fetch from your desktop’s application menu, or run:
+
+```sh
+flatpak run com.iroddyan.fetch
+```
+
+To remove the application while keeping its private settings and managed yt-dlp/Deno files for a later reinstall:
+
+```sh
+flatpak uninstall --user com.iroddyan.fetch
+```
+
+To also erase Fetch’s Flatpak data, including settings, imported cookies, and managed engine binaries, use:
+
+```sh
+flatpak uninstall --user --delete-data com.iroddyan.fetch
+```
+
+This does not automatically remove shared GNOME/Freedesktop runtimes, since other Flatpak applications may use them.
+
+### Fedora RPM
+
+Install the RPM build tools, then build the package from the Fetch checkout:
+
+```sh
+sudo dnf install rpm-build
+./packaging/build-rpm.sh
+```
+
+The script writes the package to `~/rpmbuild/RPMS/noarch/`. For this release, install it with:
+
+```sh
+sudo dnf install ~/rpmbuild/RPMS/noarch/fetch-1.1.0-1*.noarch.rpm
+```
+
+DNF installs the runtime requirements declared by the RPM from your enabled repositories. Launch Fetch from the application menu or with `fetch`.
+
+To uninstall the RPM:
+
+```sh
+sudo dnf remove fetch
+```
+
+Removing the RPM leaves your per-user Fetch settings and data in place. They are stored in the XDG directories listed in [Settings and files](#settings-and-files); remove those folders manually only if you also want to erase your preferences, cookies, queue state, and managed yt-dlp/Deno binaries.
+
+The app requires network access for media inspection, downloads, and engine updates.
 
 ## About
 
