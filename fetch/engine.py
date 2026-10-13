@@ -112,6 +112,17 @@ def _is_video_playlist_url(url: str) -> bool:
     return bool(query.get("v", [""])[0] and query.get("list", [""])[0])
 
 
+def _quality_args(quality_preference: str, max_resolution: str, *, audio_only: bool = False) -> list[str]:
+    if audio_only:
+        return []
+    args = []
+    if quality_preference == "compatible":
+        args.extend(["-S", "vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac", "--merge-output-format", "mp4"])
+    if max_resolution in {"2160", "1440", "1080", "720", "480"}:
+        args.extend(["-S", f"res:{max_resolution}"])
+    return args
+
+
 def inspect_url(
     url: str,
     options: dict[str, object] | None = None,
@@ -241,6 +252,8 @@ def download_url(
     rate_limit: str = "",
     retry_count: int = 10,
     no_playlist: bool = False,
+    quality_preference: str = "compatible",
+    max_resolution: str = "",
     archive_file: str = "",
     sponsorblock: bool = False,
     embed_metadata: bool = True,
@@ -284,6 +297,7 @@ def download_url(
         "--paths",
         str(destination),
     ])
+    command.extend(_quality_args(quality_preference, max_resolution, audio_only=bool(audio_format)))
     if audio_format:
         command.extend(["--extract-audio", "--audio-format", audio_format])
     if embed_chapters:

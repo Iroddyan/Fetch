@@ -524,6 +524,8 @@ class FetchWindow(Adw.ApplicationWindow):
             "embed_thumbnail": bool(self.settings.values.get("embed_thumbnail", True)),
             "include_media_id": bool(self.settings.values.get("include_media_id", False)),
             "no_playlist": self.single_video_check.get_active(),
+            "quality_preference": str(self.settings.values.get("quality_preference", "compatible")),
+            "max_resolution": str(self.settings.values.get("max_resolution", "")),
             "custom_arguments": custom_arguments,
         }
 
@@ -695,6 +697,29 @@ class SettingsWindow(Adw.PreferencesWindow):
             "clear_queue_on_exit",
         )
         downloads.add(queue_group)
+        quality_group = Adw.PreferencesGroup(
+            title="Video Quality",
+            description="Compatible prefers H.264 and AAC and merges to MP4. Maximum resolution sets yt-dlp’s resolution preference.",
+        )
+        self.quality_row = Adw.ComboRow(
+            title="Quality Preference",
+            model=Gtk.StringList.new(["Compatible", "Best quality"]),
+        )
+        self.quality_row.set_selected(0 if settings.values.get("quality_preference", "compatible") == "compatible" else 1)
+        self.quality_row.connect("notify::selected", self._quality_preference_changed)
+        quality_group.add(self.quality_row)
+        self.resolution_values = ("", "2160", "1440", "1080", "720", "480")
+        self.resolution_row = Adw.ComboRow(
+            title="Maximum Resolution",
+            model=Gtk.StringList.new(["No limit", "2160p", "1440p", "1080p", "720p", "480p"]),
+        )
+        saved_resolution = str(settings.values.get("max_resolution", ""))
+        self.resolution_row.set_selected(
+            self.resolution_values.index(saved_resolution) if saved_resolution in self.resolution_values else 0
+        )
+        self.resolution_row.connect("notify::selected", self._max_resolution_changed)
+        quality_group.add(self.resolution_row)
+        downloads.add(quality_group)
         downloads.set_name("downloads")
         self.add(downloads)
 
@@ -1002,6 +1027,12 @@ class SettingsWindow(Adw.PreferencesWindow):
 
     def _retry_count_changed(self, spin: Gtk.SpinButton) -> None:
         self.settings.set("retry_count", spin.get_value_as_int())
+
+    def _quality_preference_changed(self, row: Adw.ComboRow, _param: object) -> None:
+        self.settings.set("quality_preference", "compatible" if row.get_selected() == 0 else "best")
+
+    def _max_resolution_changed(self, row: Adw.ComboRow, _param: object) -> None:
+        self.settings.set("max_resolution", self.resolution_values[row.get_selected()])
 
     def _theme_changed(self, row: Adw.ComboRow, _param: object) -> None:
         scheme = ("system", "light", "dark")[row.get_selected()]

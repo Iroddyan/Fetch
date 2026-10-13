@@ -18,6 +18,8 @@ class Settings:
             "color_scheme": "system",
             "settings_page": "",
             "queue_concurrency": 2,
+            "quality_preference": "compatible",
+            "max_resolution": "",
             "cookies_file": "",
             "use_cookies": False,
             "browser_cookies": "",
@@ -52,6 +54,10 @@ class Settings:
                     self.values["settings_page"] = loaded["settings_page"]
                 if isinstance(loaded.get("queue_concurrency"), int):
                     self.values["queue_concurrency"] = max(1, min(4, loaded["queue_concurrency"]))
+                if isinstance(loaded.get("quality_preference"), str) and loaded["quality_preference"] in {"compatible", "best"}:
+                    self.values["quality_preference"] = loaded["quality_preference"]
+                if isinstance(loaded.get("max_resolution"), str) and loaded["max_resolution"] in {"", "2160", "1440", "1080", "720", "480"}:
+                    self.values["max_resolution"] = loaded["max_resolution"]
                 for key in (
                     "use_cookies", "use_yt_dlp_config", "download_archive", "sponsorblock",
                     "embed_metadata", "embed_thumbnail", "include_media_id", "clear_queue_on_exit",
