@@ -21,7 +21,7 @@ Fetch **1.1.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets 
 
 ## Requirements
 
-For running from a checkout: Python 3, PyGObject, GTK 4, libadwaita, and yt-dlp. ffmpeg and ffprobe are needed to merge separate audio/video streams. Deno 2.3 or later is recommended for full YouTube support; the official Fetch-managed yt-dlp build includes yt-dlp-ejs scripts.
+For running from a checkout: Python 3, PyGObject, GTK 4.8 or later, libadwaita 1.4 or later, and yt-dlp. GTK 4.8 is required for thumbnail fitting, and libadwaita 1.4 is required for settings navigation pages. ffmpeg and ffprobe are needed to merge separate audio/video streams. Deno 2.3 or later is recommended for full YouTube support; the official Fetch-managed yt-dlp build includes yt-dlp-ejs scripts.
 
 Run from the checkout with:
 
