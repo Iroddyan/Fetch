@@ -58,7 +58,10 @@ Install Flatpak and Flatpak Builder with your distribution’s package manager, 
 
 ```sh
 flatpak install --user flathub org.gnome.Platform//50 org.gnome.Sdk//50
-flatpak-builder --user --install --force-clean build-dir flatpak/com.iroddyan.fetch.yml
+fetch_build_dir="$HOME/.cache/fetch-flatpak"
+flatpak-builder --user --install --force-clean \
+  --state-dir="$fetch_build_dir/state" \
+  "$fetch_build_dir/build" flatpak/com.iroddyan.fetch.yml
 ```
 
 The first build may take a while because Flatpak Builder prepares the runtime and SDK. Launch Fetch from your desktop’s application menu, or run:
@@ -70,7 +73,10 @@ flatpak run com.iroddyan.fetch
 To update Fetch itself, use the updated checkout and rerun the build/install command. Flatpak Builder rebuilds the application and updates the installed copy:
 
 ```sh
-flatpak-builder --user --install --force-clean build-dir flatpak/com.iroddyan.fetch.yml
+fetch_build_dir="$HOME/.cache/fetch-flatpak"
+flatpak-builder --user --install --force-clean \
+  --state-dir="$fetch_build_dir/state" \
+  "$fetch_build_dir/build" flatpak/com.iroddyan.fetch.yml
 ```
 
 To remove the application while keeping its private settings and managed yt-dlp/Deno files for a later reinstall:
