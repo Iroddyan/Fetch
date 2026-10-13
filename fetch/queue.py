@@ -26,6 +26,11 @@ class QueueItem:
     options: dict[str, object]
     status: str = "waiting"
     progress: float = 0.0
+    entry_progress: float = 0.0
+    progress_indeterminate: bool = False
+    playlist_index: int | None = None
+    playlist_count: int | None = None
+    stage: str = ""
     speed: str = ""
     eta: str = ""
     attempt: int = 0
@@ -155,6 +160,11 @@ class QueueManager:
                 return
             item.status = "waiting"
             item.progress = 0.0
+            item.entry_progress = 0.0
+            item.progress_indeterminate = False
+            item.playlist_index = None
+            item.playlist_count = None
+            item.stage = ""
             item.error = ""
             item.logs = []
             item.attempt += 1
@@ -412,9 +422,25 @@ class QueueManager:
             if not item:
                 return
             if event.get("type") == "progress":
+                index = event.get("playlist_index")
+                count = event.get("playlist_count")
+                if isinstance(index, int) and index != item.playlist_index:
+                    item.playlist_index = index
+                    item.entry_progress = 0.0
+                if isinstance(count, int):
+                    item.playlist_count = count
                 percent = event.get("percent")
                 if isinstance(percent, (float, int)):
-                    item.progress = float(percent)
+                    item.entry_progress = max(item.entry_progress, float(percent))
+                    if item.playlist_index and item.playlist_count:
+                        overall = ((item.playlist_index - 1) * 100 + item.entry_progress) / item.playlist_count
+                    else:
+                        overall = item.entry_progress
+                    item.progress = max(item.progress, overall)
+                    item.progress_indeterminate = False
+                else:
+                    item.progress_indeterminate = bool(event.get("indeterminate", True))
+                item.stage = str(event.get("stage") or item.stage)
                 item.speed = str(event.get("speed") or "")
                 item.eta = str(event.get("eta") or "")
                 message = str(event.get("message") or "")

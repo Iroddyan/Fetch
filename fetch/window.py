@@ -599,9 +599,18 @@ class FetchWindow(Adw.ApplicationWindow):
         title_row.append(Gtk.Label(label=_status_label(item.status), xalign=1, css_classes=["dim-label"]))
         layout.append(title_row)
         progress = Gtk.ProgressBar(show_text=True)
-        progress.set_fraction(max(0.0, min(1.0, item.progress / 100.0)))
+        if item.progress_indeterminate:
+            progress.pulse()
+        else:
+            progress.set_fraction(max(0.0, min(1.0, item.progress / 100.0)))
         detail = " · ".join(part for part in (item.speed, item.eta) if part)
-        progress.set_text(f"{item.progress:.1f}%" + (f" · {detail}" if detail else ""))
+        context = []
+        if item.playlist_index and item.playlist_count:
+            context.append(f"Item {item.playlist_index}/{item.playlist_count}")
+        if item.stage:
+            context.append(item.stage)
+        context.extend(([] if item.progress_indeterminate else [f"{item.progress:.1f}%"]) + ([detail] if detail else []))
+        progress.set_text(" · ".join(context) or _status_label(item.status))
         progress.set_visible(item.status in {"running", "paused", "completed"})
         layout.append(progress)
         if item.error:
