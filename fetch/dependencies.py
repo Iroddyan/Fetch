@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import io
+import shutil
 import urllib.error
 import urllib.request
 import zipfile
@@ -21,6 +22,36 @@ YT_DLP_CHANNELS = {
     "stable": "yt-dlp/yt-dlp",
     "nightly": "yt-dlp/yt-dlp-nightly-builds",
 }
+
+
+def is_flatpak() -> bool:
+    return Path("/.flatpak-info").is_file()
+
+
+def ffmpeg_install_hint() -> str:
+    missing = [name for name in ("ffmpeg", "ffprobe") if shutil.which(name) is None]
+    if not missing:
+        return ""
+    if is_flatpak():
+        return "This Flatpak needs its ffmpeg runtime extension. Update or reinstall Fetch to restore it."
+    release = {}
+    try:
+        for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                release[key] = value.strip().strip('"').lower()
+    except OSError:
+        pass
+    ids = {release.get("ID", ""), *release.get("ID_LIKE", "").split()}
+    if ids & {"fedora", "rhel", "centos", "rocky", "almalinux"}:
+        return "Install both tools with: sudo dnf install ffmpeg"
+    if ids & {"debian", "ubuntu", "linuxmint", "pop"}:
+        return "Install both tools with: sudo apt install ffmpeg"
+    if "arch" in ids or ids & {"manjaro", "endeavouros"}:
+        return "Install both tools with: sudo pacman -S ffmpeg"
+    if ids & {"opensuse-tumbleweed", "opensuse-leap", "opensuse", "suse", "sles"}:
+        return "Install both tools with: sudo zypper install ffmpeg"
+    return "Install ffmpeg and ffprobe with your distribution’s package manager."
 
 
 def managed_yt_dlp_path() -> Path:

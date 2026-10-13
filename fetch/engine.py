@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .dependencies import managed_deno_path, managed_yt_dlp_path
+from .dependencies import ffmpeg_install_hint, managed_deno_path, managed_yt_dlp_path
 from .paths import cache_dir
 
 
@@ -278,6 +278,15 @@ def download_url(
     executable = find_binary("yt-dlp")
     if not executable:
         raise EngineError("yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again.")
+    if audio_format or "+" in format_spec:
+        missing = [name for name in ("ffmpeg", "ffprobe") if not shutil.which(name)]
+        if missing:
+            hint = ffmpeg_install_hint()
+            raise EngineError(ErrorDetails(
+                f"This download needs {', '.join(missing)} to merge or convert media.",
+                hint,
+                "install_ffmpeg",
+            ))
     destination.mkdir(parents=True, exist_ok=True)
     command = [executable]
     base_options = {
