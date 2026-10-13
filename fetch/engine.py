@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from . import APP_VERSION
 from .dependencies import ffmpeg_install_hint, is_flatpak, managed_deno_path, managed_yt_dlp_path
 from .paths import cache_dir
 
@@ -541,7 +542,7 @@ def _cache_thumbnail(url: str | None) -> Path | None:
     if not url:
         return None
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "Fetch/0.1"})
+        request = urllib.request.Request(url, headers={"User-Agent": f"Fetch/{APP_VERSION}"})
         with urllib.request.urlopen(request, timeout=8) as response:
             content_type = response.headers.get_content_type()
             if not content_type.startswith("image/"):
@@ -559,6 +560,4 @@ def _cache_thumbnail(url: str | None) -> Path | None:
 
 
 def _quote_arg(value: str) -> str:
-    import shlex
-
     return shlex.quote(value)

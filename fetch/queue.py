@@ -250,8 +250,13 @@ class QueueManager:
     def _persist_locked(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(".json.tmp")
+        persisted = []
+        for item in self._items:
+            data = asdict(item)
+            data["logs"] = item.logs[-50:]
+            persisted.append(data)
         temporary.write_text(
-            json.dumps([asdict(item) for item in self._items], ensure_ascii=False, indent=2) + "\n",
+            json.dumps(persisted, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
         os.chmod(temporary, 0o600)
