@@ -4,14 +4,15 @@ Fetch is a native Linux desktop frontend for [yt-dlp](https://github.com/yt-dlp/
 
 ## Release
 
-Fetch **1.0.0** completes Bits 0–15 of the project roadmap. The first release targets Linux, with Fedora GNOME and Wayland as its reference desktop. The application ID is `com.iroddyan.fetch`.
+Fetch **1.1.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets Linux, with Fedora GNOME and Wayland as its reference desktop. The application ID is `com.iroddyan.fetch`.
 
 ## Features
 
 - GTK 4 and libadwaita interface with searchable, persistent settings pages.
 - URL and playlist inspection, thumbnails, media details, format selection, and playlist item selection.
 - Best-quality and audio-only downloads, subtitles, chapters, metadata, thumbnail embedding, and SponsorBlock.
-- Persistent queue with concurrency limits, structured progress, speed and ETA, pause/resume, cancel, retry, and recovery of interrupted work.
+- Queue with concurrency limits, structured progress, speed and ETA, pause/resume, cancel, retry, and a Clear Queue action. By default, the queue is cleared when Fetch closes; this can be changed in Settings → Downloads.
+- Music downloads default to embedded square artwork and `Artist - Title` filenames without the media ID. Settings → Media lets you change artwork embedding or include IDs.
 - Direct, checksum-verified updates for the official yt-dlp and Deno Linux builds, independent of app updates. System-provided tools remain supported.
 - Dependency status for yt-dlp, ffmpeg, ffprobe, and Deno, with yt-dlp errors and command logs available from the queue.
 - Cookies.txt import and browser-cookie selection, optional yt-dlp configuration, download archive, proxy and speed limits, retries, and raw yt-dlp arguments.
@@ -32,7 +33,7 @@ On Fedora, the Python runtime must be able to import `gi`, and GTK 4 and libadwa
 
 ## Engine updates
 
-Open **Settings → Engine** to see installed versions or update yt-dlp and Deno. Fetch downloads the official Linux release, verifies its published SHA-256 checksum, checks the executable version, then installs it in the current user's data directory. It does not replace a system package. When present, a Fetch-managed binary takes priority over the system binary; ffmpeg and ffprobe are detected from the system `PATH`.
+Open **Settings → Engine** to see installed versions or update yt-dlp and Deno. Dependency versions load in the background so Settings can open immediately. Fetch downloads the official Linux release, verifies its published SHA-256 checksum, checks the executable version, then installs it in the current user's data directory. It does not replace a system package. When present, a Fetch-managed binary takes priority over the system binary; ffmpeg and ffprobe are detected from the system `PATH`.
 
 Fetch uses Deno because current yt-dlp YouTube extraction can require a JavaScript runtime. The officially managed yt-dlp release is the project's Linux zipimport build, which includes its EJS support files. Third-party yt-dlp builds can package these dependencies differently.
 
@@ -55,7 +56,7 @@ Build a Fedora RPM from the checkout with `packaging/build-rpm.sh`; the package 
 
 ## About
 
-- **App:** Fetch 1.0.0
+- **App:** Fetch 1.1.0
 - **Application ID:** `com.iroddyan.fetch`
 - **Creator and maintainer:** Iroddyan Waykins
 - **Development collaborator:** Codex (AI)
@@ -66,5 +67,5 @@ Build a Fedora RPM from the checkout with `packaging/build-rpm.sh`; the package 
 
 - Playlist inspection lists up to 500 entries at once. Use the playlist range controls to select a range beyond the visible list.
 - Exact format selection is available for individually inspected media. Playlist downloads use best quality or audio-only settings because a playlist inspection does not retrieve every item's complete format list.
-- Pause/resume uses Linux process-group signals. If Fetch closes during a download, it is recorded as interrupted and can be retried after reopening.
+- Pause/resume uses Linux process-group signals. By default, Clear Queue on Quit removes queued work and stops active downloads when Fetch closes. Turn it off in Settings → Downloads to keep interrupted items for later.
 - Flatpak can read browser profiles only when the user grants the required access; the imported cookies.txt flow avoids that dependency.

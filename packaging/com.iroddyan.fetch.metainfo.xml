@@ -12,6 +12,9 @@
     <name>Iroddyan Waykins</name>
   </developer>
   <releases>
+    <release version="1.1.0" date="2026-10-13">
+      <description><p>Music downloads now use Artist - Title filenames, embed square artwork by default, and omit media IDs by default. Settings open faster with sidebar navigation, and the queue can be cleared manually or on quit.</p></description>
+    </release>
     <release version="1.0.0" date="2026-10-13">
       <description><p>First stable Linux release.</p></description>
     </release>

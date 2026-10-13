@@ -137,6 +137,9 @@ class FetchWindow(Adw.ApplicationWindow):
         self.start_queue_button.connect("clicked", lambda *_: self.queue_manager.start())
         queue_header.append(queue_title)
         queue_header.append(self.start_queue_button)
+        self.clear_queue_button = Gtk.Button(label="Clear Queue")
+        self.clear_queue_button.connect("clicked", lambda *_: self.queue_manager.clear())
+        queue_header.append(self.clear_queue_button)
         content.append(queue_header)
         self.queue_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
         self.queue_list.add_css_class("boxed-list")
@@ -162,7 +165,7 @@ class FetchWindow(Adw.ApplicationWindow):
         if self._clipboard_source_id:
             GLib.source_remove(self._clipboard_source_id)
             self._clipboard_source_id = None
-        self.queue_manager.shutdown()
+        self.queue_manager.shutdown(clear_queue=bool(self.settings.values.get("clear_queue_on_exit", True)))
         return False
 
     def _enable_clipboard_offer(self) -> None:
@@ -199,8 +202,13 @@ class FetchWindow(Adw.ApplicationWindow):
         SettingsWindow(self, self.settings, self.queue_manager).present()
 
     def _update_engine_summary(self) -> None:
-        version = binary_version("yt-dlp")
-        self.engine_label.set_text(f"yt-dlp {version}" if version else "yt-dlp isn’t installed")
+        self.engine_label.set_text("Checking yt-dlp…")
+
+        def work() -> None:
+            version = binary_version("yt-dlp")
+            GLib.idle_add(self.engine_label.set_text, f"yt-dlp {version}" if version else "yt-dlp isn’t installed")
+
+        threading.Thread(target=work, name="fetch-version-summary", daemon=True).start()
 
     def _inspect(self, *_args: object) -> None:
         url = self.url_entry.get_text().strip()
@@ -461,7 +469,8 @@ class FetchWindow(Adw.ApplicationWindow):
             "archive_file": str(state_dir() / "download-archive.txt") if use_archive else "",
             "sponsorblock": bool(self.settings.values.get("sponsorblock", False)),
             "embed_metadata": bool(self.settings.values.get("embed_metadata", True)),
-            "embed_thumbnail": bool(self.settings.values.get("embed_thumbnail", False)),
+            "embed_thumbnail": bool(self.settings.values.get("embed_thumbnail", True)),
+            "include_media_id": bool(self.settings.values.get("include_media_id", False)),
             "custom_arguments": custom_arguments,
         }
 
@@ -501,6 +510,7 @@ class FetchWindow(Adw.ApplicationWindow):
             child = next_child
         self.queue_empty_label.set_visible(not items)
         self.start_queue_button.set_visible(any(item.status == "waiting" for item in items))
+        self.clear_queue_button.set_sensitive(bool(items))
         for item in items:
             previous = self._last_job_states.get(item.id)
             if previous != item.status and item.status in {"completed", "failed"}:
@@ -603,7 +613,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.settings = settings
         self.queue_manager = queue_manager
         self._entry_timers: dict[str, int] = {}
-        self.set_default_size(680, 740)
+        self.set_default_size(1000, 760)
 
         downloads = Adw.PreferencesPage(title="Downloads", icon_name="folder-download-symbolic")
         folder_group = Adw.PreferencesGroup(title="Save Downloads")
@@ -613,6 +623,9 @@ class SettingsWindow(Adw.PreferencesWindow):
         folder_row.add_suffix(choose_button)
         folder_row.set_activatable_widget(choose_button)
         folder_group.add(folder_row)
+        downloads.add(folder_group)
+
+        queue_group = Adw.PreferencesGroup(title="Queue")
         concurrency_row = Adw.ActionRow(
             title="Simultaneous Downloads",
             subtitle="Limit active downloads to reduce network and system load.",
@@ -621,10 +634,40 @@ class SettingsWindow(Adw.PreferencesWindow):
         concurrency = Gtk.SpinButton(adjustment=adjustment, climb_rate=1, digits=0, valign=Gtk.Align.CENTER)
         concurrency.connect("value-changed", self._concurrency_changed)
         concurrency_row.add_suffix(concurrency)
-        folder_group.add(concurrency_row)
-        downloads.add(folder_group)
+        queue_group.add(concurrency_row)
+        self._add_switch(
+            queue_group,
+            "Clear Queue on Quit",
+            "Remove queued items and stop active downloads when Fetch closes. Turn this off to keep interrupted items for later.",
+            "clear_queue_on_exit",
+        )
+        downloads.add(queue_group)
+        downloads.set_name("downloads")
         self.add(downloads)
 
+        media = Adw.PreferencesPage(title="Media", icon_name="audio-x-generic-symbolic")
+        music_group = Adw.PreferencesGroup(
+            title="Music Downloads",
+            description="Audio files use Artist - Title. When artist details are missing, Fetch uses the uploader name.",
+        )
+        self._add_switch(
+            music_group,
+            "Embed Artwork",
+            "Add square, 1:1 artwork to supported audio formats by default.",
+            "embed_thumbnail",
+        )
+        self._add_switch(
+            music_group,
+            "Include Media ID in Filename",
+            "Append the source media ID to music filenames to help distinguish similarly named tracks.",
+            "include_media_id",
+        )
+        media.add(music_group)
+        media.set_name("media")
+        self.add(media)
+
+        privacy = Adw.PreferencesPage(title="Privacy & Security", icon_name="channel-secure-symbolic")
+        privacy_group = Adw.PreferencesGroup(title="Sign In")
         cookies = Adw.PreferencesPage(title="Cookies", icon_name="channel-secure-symbolic")
         cookie_group = Adw.PreferencesGroup(
             title="Account Cookies",
@@ -660,15 +703,23 @@ class SettingsWindow(Adw.PreferencesWindow):
         remove_row.add_suffix(self.remove_cookies_button)
         cookie_group.add(remove_row)
         cookies.add(cookie_group)
-        self.add(cookies)
+        self._cookies_subpage = Adw.NavigationPage.new(cookies, "Cookies")
+        cookie_row = Adw.ActionRow(title="Cookies", subtitle="Manage sign-in cookies for media sites.")
+        cookie_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        cookie_row.set_activatable(True)
+        cookie_row.connect("activated", lambda *_: self._open_subpage(self._cookies_subpage, "Cookies"))
+        privacy_group.add(cookie_row)
+        privacy.add(privacy_group)
+        privacy.set_name("privacy")
+        self.add(privacy)
 
         engine = Adw.PreferencesPage(title="Engine", icon_name="applications-system-symbolic")
+        engine.set_name("engine")
         engine_group = Adw.PreferencesGroup(
             title="yt-dlp",
             description="Fetch maintains its own copy under your user data folder. Updating it does not replace a system-managed copy.",
         )
-        current = binary_version("yt-dlp") or "Not found"
-        self.engine_version_row = Adw.ActionRow(title="Active version", subtitle=current)
+        self.engine_version_row = Adw.ActionRow(title="Active version", subtitle="Checking…")
         engine_group.add(self.engine_version_row)
         update_row = Adw.ActionRow(
             title="Update yt-dlp",
@@ -686,14 +737,14 @@ class SettingsWindow(Adw.PreferencesWindow):
             title="Media Dependencies",
             description="ffmpeg is used to merge separate streams and handle conversion. Deno 2.3+ is recommended for full YouTube support; official yt-dlp binaries include the EJS scripts.",
         )
+        self.dependency_rows: dict[str, tuple[Adw.ActionRow, Gtk.Image]] = {}
         for name in ("ffmpeg", "ffprobe", "deno"):
-            version = binary_version(name)
-            detail = version or "Not found on PATH"
-            row = Adw.ActionRow(title=name, subtitle=detail)
-            icon = Gtk.Image.new_from_icon_name("emblem-ok-symbolic" if version else "dialog-warning-symbolic")
+            row = Adw.ActionRow(title=name, subtitle="Checking…")
+            icon = Gtk.Image.new_from_icon_name("content-loading-symbolic")
             icon.set_valign(Gtk.Align.CENTER)
             row.add_suffix(icon)
             dependency_group.add(row)
+            self.dependency_rows[name] = (row, icon)
             if name == "deno":
                 self.deno_version_row = row
         deno_update_row = Adw.ActionRow(
@@ -720,7 +771,6 @@ class SettingsWindow(Adw.PreferencesWindow):
         self._add_switch(advanced_group, "Avoid Duplicate Downloads", "Keep a Fetch download archive and skip items already completed by yt-dlp.", "download_archive")
         self._add_switch(advanced_group, "Remove Sponsored Segments", "Ask SponsorBlock to remove sponsor segments when available.", "sponsorblock")
         self._add_switch(advanced_group, "Embed Metadata", "Write available title and creator information into the media file.", "embed_metadata")
-        self._add_switch(advanced_group, "Embed Thumbnail", "Add the media thumbnail as cover art when the format supports it.", "embed_thumbnail")
         self._add_text_setting(advanced_group, "Proxy", "Optional HTTP, HTTPS or SOCKS proxy.", "proxy", "https://proxy.example:8080")
         self._add_text_setting(advanced_group, "Speed Limit", "Optional yt-dlp rate limit, for example 2M.", "rate_limit", "2M")
         retries_row = Adw.ActionRow(title="Network Retries", subtitle="Retry transient connection failures.")
@@ -737,7 +787,12 @@ class SettingsWindow(Adw.PreferencesWindow):
             "--merge-output-format mkv",
         )
         advanced.add(advanced_group)
-        self.add(advanced)
+        self._advanced_subpage = Adw.NavigationPage.new(advanced, "Advanced")
+        advanced_row = Adw.ActionRow(title="Advanced Engine Options", subtitle="Open custom arguments and network controls.")
+        advanced_row.add_suffix(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        advanced_row.set_activatable(True)
+        advanced_row.connect("activated", lambda *_: self._open_subpage(self._advanced_subpage, "Advanced"))
+        engine_group.add(advanced_row)
 
         appearance = Adw.PreferencesPage(title="Appearance", icon_name="applications-graphics-symbolic")
         appearance_group = Adw.PreferencesGroup(title="Appearance")
@@ -750,6 +805,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         theme_row.connect("notify::selected", self._theme_changed)
         appearance_group.add(theme_row)
         appearance.add(appearance_group)
+        appearance.set_name("appearance")
         self.add(appearance)
 
         notifications = Adw.PreferencesPage(title="Notifications", icon_name="preferences-system-notifications-symbolic")
@@ -767,6 +823,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         clipboard_switch_row.add_suffix(clipboard_switch)
         notifications_group.add(clipboard_switch_row)
         notifications.add(notifications_group)
+        notifications.set_name("notifications")
         self.add(notifications)
 
         about = Adw.PreferencesPage(title="About", icon_name="help-about-symbolic")
@@ -781,18 +838,54 @@ class SettingsWindow(Adw.PreferencesWindow):
         about.add(identity_group)
         versions_group = Adw.PreferencesGroup(title="Versions")
         versions_group.add(Adw.ActionRow(title="Fetch", subtitle=APP_VERSION))
+        self.about_version_rows: dict[str, Adw.ActionRow] = {}
         for name in ("yt-dlp", "ffmpeg", "ffprobe", "deno"):
-            versions_group.add(Adw.ActionRow(title=name, subtitle=binary_version(name) or "Not detected"))
+            row = Adw.ActionRow(title=name, subtitle="Checking…")
+            versions_group.add(row)
+            self.about_version_rows[name] = row
         versions_group.add(Adw.ActionRow(
             title="Desktop toolkit",
             subtitle=f"GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()} · libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}",
         ))
         about.add(versions_group)
+        about.set_name("about")
         self.add(about)
         saved_page = str(settings.values.get("settings_page", ""))
-        if saved_page:
-            self.set_visible_page_name(saved_page)
+        if saved_page in {"Cookies", "Advanced"}:
+            self.set_visible_page_name("privacy" if saved_page == "Cookies" else "engine")
+            GLib.idle_add(self._restore_subpage, self._cookies_subpage if saved_page == "Cookies" else self._advanced_subpage)
+        elif saved_page:
+            aliases = {
+                "Downloads": "downloads", "Media": "media", "Privacy & Security": "privacy",
+                "Engine": "engine", "Appearance": "appearance", "Notifications": "notifications", "About": "about",
+            }
+            self.set_visible_page_name(aliases.get(saved_page, saved_page))
         self.connect("notify::visible-page-name", self._settings_page_changed)
+        threading.Thread(target=self._load_versions, name="fetch-settings-versions", daemon=True).start()
+
+    def _open_subpage(self, page: Adw.NavigationPage, page_name: str) -> None:
+        self.settings.set("settings_page", page_name)
+        self.push_subpage(page)
+
+    def _restore_subpage(self, page: Adw.NavigationPage) -> bool:
+        self.push_subpage(page)
+        return GLib.SOURCE_REMOVE
+
+    def _load_versions(self) -> None:
+        versions = {name: binary_version(name) for name in ("yt-dlp", "ffmpeg", "ffprobe", "deno")}
+        GLib.idle_add(self._show_versions, versions)
+
+    def _show_versions(self, versions: dict[str, str | None]) -> bool:
+        for name, version in versions.items():
+            detail = version or ("Not found" if name == "yt-dlp" else "Not found on PATH")
+            if name == "yt-dlp":
+                self.engine_version_row.set_subtitle(detail)
+            else:
+                row, icon = self.dependency_rows[name]
+                row.set_subtitle(detail)
+                icon.set_from_icon_name("emblem-ok-symbolic" if version else "dialog-warning-symbolic")
+            self.about_version_rows[name].set_subtitle(detail)
+        return GLib.SOURCE_REMOVE
 
     def _add_switch(self, group: Adw.PreferencesGroup, title: str, subtitle: str, key: str) -> Gtk.Switch:
         row = Adw.ActionRow(title=title, subtitle=subtitle)
@@ -947,6 +1040,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.update_feedback.set_text(error or message)
         if version:
             self.engine_version_row.set_subtitle(version)
+            self.about_version_rows["yt-dlp"].set_subtitle(version)
             self.parent_window._update_engine_summary()
         return GLib.SOURCE_REMOVE
 
@@ -969,6 +1063,7 @@ class SettingsWindow(Adw.PreferencesWindow):
         self.deno_update_feedback.set_text(error or message)
         if version:
             self.deno_version_row.set_subtitle(version)
+            self.about_version_rows["deno"].set_subtitle(version)
         return GLib.SOURCE_REMOVE
 
     def _choose_directory(self, _button: Gtk.Button, row: Adw.ActionRow) -> None:

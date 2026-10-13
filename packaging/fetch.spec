@@ -1,5 +1,5 @@
 Name:           fetch
-Version:        1.0.0
+Version:        1.1.0
 Release:        1%{?dist}
 Summary:        Native desktop frontend for yt-dlp
 License:        LicenseRef-NotSpecified

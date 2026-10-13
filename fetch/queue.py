@@ -172,23 +172,47 @@ class QueueManager:
             self.concurrency = max(1, min(4, value))
         self._pump()
 
-    def shutdown(self) -> None:
+    def clear(self) -> None:
+        """Remove every queued item and stop active downloads."""
+        with self._lock:
+            self._clear_locked()
+        self._emit()
+
+    def _clear_locked(self) -> None:
+        for item in self._items:
+            if item.id in self._active:
+                self._cancel_requested.add(item.id)
+            process = self._processes.get(item.id)
+            if process and process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGCONT)
+                    os.killpg(process.pid, signal.SIGTERM)
+                except OSError:
+                    pass
+        self._items.clear()
+        self._start_explicitly_required = False
+        self._persist_locked()
+
+    def shutdown(self, clear_queue: bool = True) -> None:
         with self._lock:
             if self._closed:
                 return
             self._closed = True
-            for item in self._items:
-                if item.status in {"running", "paused"}:
-                    item.status = "interrupted"
-                    item.error = "Fetch closed while this download was active. Retry when you’re ready."
-                    process = self._processes.get(item.id)
-                    if process and process.poll() is None:
-                        try:
-                            os.killpg(process.pid, signal.SIGCONT)
-                            os.killpg(process.pid, signal.SIGTERM)
-                        except OSError:
-                            pass
-            self._persist_locked()
+            if clear_queue:
+                self._clear_locked()
+            else:
+                for item in self._items:
+                    if item.status in {"running", "paused"}:
+                        item.status = "interrupted"
+                        item.error = "Fetch closed while this download was active. Retry when you’re ready."
+                        process = self._processes.get(item.id)
+                        if process and process.poll() is None:
+                            try:
+                                os.killpg(process.pid, signal.SIGCONT)
+                                os.killpg(process.pid, signal.SIGTERM)
+                            except OSError:
+                                pass
+                self._persist_locked()
             self._listeners.clear()
         self._executor.shutdown(wait=False, cancel_futures=True)
 
@@ -250,15 +274,27 @@ class QueueManager:
         with self._lock:
             item = self._get(item_id)
             if not item:
-                return
-            if item.status == "cancelled":
                 self._active.pop(item_id, None)
                 self._cancel_requested.discard(item_id)
-                self._emit()
-                self._pump()
-                return
-            options = dict(item.options)
-            url = item.url
+                should_pump = True
+            else:
+                should_pump = False
+            if should_pump:
+                options = {}
+                url = ""
+            elif item.status == "cancelled":
+                self._active.pop(item_id, None)
+                self._cancel_requested.discard(item_id)
+                should_pump = True
+                options = {}
+                url = ""
+            else:
+                options = dict(item.options)
+                url = item.url
+        if should_pump:
+            self._emit()
+            self._pump()
+            return
         def on_event(event: dict[str, object]) -> None:
             self._handle_event(item_id, event)
 
@@ -311,7 +347,8 @@ class QueueManager:
                 archive_file=str(options.get("archive_file") or ""),
                 sponsorblock=bool(options.get("sponsorblock")),
                 embed_metadata=bool(options.get("embed_metadata", True)),
-                embed_thumbnail=bool(options.get("embed_thumbnail")),
+                embed_thumbnail=bool(options.get("embed_thumbnail", True)),
+                include_media_id=bool(options.get("include_media_id", False)),
                 custom_arguments=str(options.get("custom_arguments") or ""),
             )
             with self._lock:

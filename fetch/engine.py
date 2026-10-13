@@ -169,7 +169,8 @@ def download_url(
     archive_file: str = "",
     sponsorblock: bool = False,
     embed_metadata: bool = True,
-    embed_thumbnail: bool = False,
+    embed_thumbnail: bool = True,
+    include_media_id: bool = False,
     custom_arguments: str = "",
 ) -> tuple[int, str]:
     executable = find_binary("yt-dlp")
@@ -179,6 +180,12 @@ def download_url(
     command = [executable]
     if not use_yt_dlp_config:
         command.append("--ignore-config")
+    if audio_format:
+        filename_template = "%(artist,creator,uploader,channel|Unknown Artist)s - %(title)s"
+    else:
+        filename_template = "%(title)s"
+    if include_media_id:
+        filename_template += " [%(id)s]"
     command.extend([
         "--no-warnings",
         "--newline",
@@ -191,7 +198,7 @@ def download_url(
         "--format",
         format_spec,
         "--output",
-        "%(title)s [%(id)s].%(ext)s",
+        filename_template + ".%(ext)s",
         "--paths",
         str(destination),
     ])
@@ -218,6 +225,11 @@ def download_url(
         command.append("--embed-metadata")
     if embed_thumbnail:
         command.append("--embed-thumbnail")
+        if audio_format:
+            command.extend([
+                "--convert-thumbnails", "jpg>png/png>jpg/webp>png",
+                "--ppa", r"ThumbnailsConvertor+ffmpeg_o:-vf crop=min(iw\\,ih):min(iw\\,ih)",
+            ])
     if subtitle_languages:
         command.extend(["--write-subs", "--sub-langs", subtitle_languages])
         if automatic_subtitles:
