@@ -57,6 +57,7 @@ class FetchWindow(Adw.ApplicationWindow):
         self._format_choices: list[FormatInfo | None] = []
         self._playlist_checks: list[tuple[int, Gtk.CheckButton]] = []
         self._shutdown = False
+        self._inspect_cancel_event: threading.Event | None = None
         self._last_job_states: dict[str, str] = {}
         self._last_clipboard_url = ""
         self._clipboard_source_id: int | None = None
@@ -106,6 +107,10 @@ class FetchWindow(Adw.ApplicationWindow):
         self.inspect_button.connect("clicked", self._inspect)
         url_row.append(self.url_entry)
         url_row.append(self.inspect_button)
+        self.cancel_inspect_button = Gtk.Button(label="Cancel")
+        self.cancel_inspect_button.connect("clicked", self._cancel_inspection)
+        self.cancel_inspect_button.set_visible(False)
+        url_row.append(self.cancel_inspect_button)
         content.append(url_row)
 
         self.status_label = Gtk.Label(label="", xalign=0, wrap=True, selectable=True)
@@ -221,22 +226,46 @@ class FetchWindow(Adw.ApplicationWindow):
         self.add_queue_button.set_visible(False)
         self.media_card.set_child(None)
         self.inspect_button.set_sensitive(False)
+        cancel_event = threading.Event()
+        self._inspect_cancel_event = cancel_event
+        self.cancel_inspect_button.set_label("Cancel")
+        self.cancel_inspect_button.set_sensitive(True)
+        self.cancel_inspect_button.set_visible(True)
         self.status_label.remove_css_class("error")
         self.status_label.add_css_class("dim-label")
         self.status_label.set_text("Inspecting link…")
 
         def work() -> None:
             try:
-                info, thumbnail = inspect_url(url, self._advanced_options())
+                info, thumbnail = inspect_url(url, self._advanced_options(), cancel_event=cancel_event)
                 GLib.idle_add(self._show_media, info, thumbnail)
             except EngineError as error:
-                GLib.idle_add(self._show_error, str(error))
+                if cancel_event.is_set():
+                    GLib.idle_add(self._inspection_cancelled)
+                else:
+                    GLib.idle_add(self._show_error, str(error))
             except Exception as error:
                 GLib.idle_add(self._show_error, f"Fetch couldn’t inspect this link: {error}")
             finally:
-                GLib.idle_add(self.inspect_button.set_sensitive, True)
+                GLib.idle_add(self._finish_inspection)
 
         threading.Thread(target=work, name="fetch-inspect", daemon=True).start()
+
+    def _cancel_inspection(self, _button: Gtk.Button) -> None:
+        if self._inspect_cancel_event:
+            self._inspect_cancel_event.set()
+            self.cancel_inspect_button.set_sensitive(False)
+            self.cancel_inspect_button.set_label("Stopping…")
+
+    def _inspection_cancelled(self) -> bool:
+        self.status_label.set_text("Inspection cancelled.")
+        return GLib.SOURCE_REMOVE
+
+    def _finish_inspection(self) -> bool:
+        self.inspect_button.set_sensitive(True)
+        self.cancel_inspect_button.set_visible(False)
+        self._inspect_cancel_event = None
+        return GLib.SOURCE_REMOVE
 
     def _show_media(self, info: MediaInfo, thumbnail: Path | None) -> bool:
         self.media_info = info

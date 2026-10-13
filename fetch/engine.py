@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import shutil
 import shlex
 import subprocess
+import threading
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -101,7 +104,13 @@ def _base_args(options: dict[str, object] | None = None) -> list[str]:
     return args
 
 
-def inspect_url(url: str, options: dict[str, object] | None = None) -> tuple[MediaInfo, Path | None]:
+def inspect_url(
+    url: str,
+    options: dict[str, object] | None = None,
+    *,
+    cancel_event: threading.Event | None = None,
+    timeout: float = 90,
+) -> tuple[MediaInfo, Path | None]:
     executable = find_binary("yt-dlp")
     if not executable:
         raise EngineError("yt-dlp isn’t installed or isn’t available on PATH. Install yt-dlp, then try again.")
@@ -116,12 +125,51 @@ def inspect_url(url: str, options: dict[str, object] | None = None) -> tuple[Med
         "--",
         url,
     ]
-    result = subprocess.run(command, capture_output=True, text=True, check=False, env=engine_environment())
-    if result.returncode:
-        raise EngineError(_friendly_error(result.stderr or result.stdout))
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+            env=engine_environment(),
+        )
+    except OSError as error:
+        raise EngineError(f"Fetch couldn’t start yt-dlp: {error}") from error
+    deadline = time.monotonic() + timeout
+    while True:
+        if cancel_event and cancel_event.is_set():
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except OSError:
+                pass
+            try:
+                process.communicate(timeout=3)
+            except subprocess.TimeoutExpired:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+                process.communicate()
+            raise EngineError("Inspection cancelled.")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            process.communicate()
+            raise EngineError("Inspecting timed out. Check your connection or update yt-dlp.")
+        try:
+            stdout, stderr = process.communicate(timeout=min(0.25, remaining))
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    if process.returncode:
+        raise EngineError(_friendly_error(stderr or stdout))
 
     try:
-        data = json.loads(result.stdout)
+        data = json.loads(stdout)
     except json.JSONDecodeError as error:
         raise EngineError("yt-dlp returned information Fetch couldn’t read. Try updating yt-dlp and inspect the log.") from error
 
