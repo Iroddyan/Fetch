@@ -52,6 +52,7 @@ class QueueManager:
         self._active: dict[str, Future[None]] = {}
         self._processes: dict[str, subprocess.Popen[str]] = {}
         self._cancel_requested: set[str] = set()
+        self._pause_requested: set[str] = set()
         self._last_saved = 0.0
         self._started = False
         self._start_explicitly_required = False
@@ -102,10 +103,12 @@ class QueueManager:
             item.status = "paused"
             item.updated_at = time.time()
             process = self._processes.get(item_id)
+            if item_id in self._active:
+                self._pause_requested.add(item_id)
             self._persist_locked()
         if process and process.poll() is None:
             try:
-                os.killpg(process.pid, signal.SIGSTOP)
+                os.killpg(process.pid, signal.SIGTERM)
             except OSError:
                 pass
         self._emit()
@@ -115,16 +118,10 @@ class QueueManager:
             item = self._get(item_id)
             if not item or item.status != "paused":
                 return
-            process = self._processes.get(item_id)
-            item.status = "running" if process else "waiting"
+            item.status = "waiting"
             item.updated_at = time.time()
             self._started = True
             self._persist_locked()
-        if process and process.poll() is None:
-            try:
-                os.killpg(process.pid, signal.SIGCONT)
-            except OSError:
-                pass
         self._emit()
         self._pump()
 
@@ -321,7 +318,7 @@ class QueueManager:
                         pass
                 elif item and item.status == "paused":
                     try:
-                        os.killpg(process.pid, signal.SIGSTOP)
+                        os.killpg(process.pid, signal.SIGTERM)
                     except OSError:
                         pass
         try:
@@ -354,6 +351,7 @@ class QueueManager:
             with self._lock:
                 item = self._get(item_id)
                 cancelled = item_id in self._cancel_requested
+                pause_requested = item_id in self._pause_requested
                 if item:
                     item.command = command
                     if self._closed:
@@ -363,28 +361,41 @@ class QueueManager:
                     elif code == 0:
                         item.status = "completed"
                         item.progress = 100.0
+                    elif pause_requested and item.status in {"paused", "waiting"}:
+                        item.error = ""
                     else:
                         item.status = "failed"
                         details = "\n".join(item.logs[-15:]) or f"yt-dlp exited with status {code}."
                         item.error = _friendly_error(details)
                     item.updated_at = time.time()
                 self._cancel_requested.discard(item_id)
+                self._pause_requested.discard(item_id)
                 self._persist_locked()
         except EngineError as error:
             with self._lock:
                 item = self._get(item_id)
                 if item:
-                    item.status = "interrupted" if self._closed else "failed"
-                    item.error = str(error)
+                    pause_requested = item_id in self._pause_requested
+                    if not self._closed and pause_requested and item.status in {"paused", "waiting"}:
+                        item.error = ""
+                    else:
+                        item.status = "interrupted" if self._closed else "failed"
+                        item.error = str(error)
                     item.updated_at = time.time()
+                self._pause_requested.discard(item_id)
                 self._persist_locked()
         except Exception as error:
             with self._lock:
                 item = self._get(item_id)
                 if item:
-                    item.status = "interrupted" if self._closed else "failed"
-                    item.error = f"Fetch couldn’t complete the download: {error}"
+                    pause_requested = item_id in self._pause_requested
+                    if not self._closed and pause_requested and item.status in {"paused", "waiting"}:
+                        item.error = ""
+                    else:
+                        item.status = "interrupted" if self._closed else "failed"
+                        item.error = f"Fetch couldn’t complete the download: {error}"
                     item.updated_at = time.time()
+                self._pause_requested.discard(item_id)
                 self._persist_locked()
         finally:
             with self._lock:
