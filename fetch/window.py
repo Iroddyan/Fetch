@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import platform
+import shutil
+import subprocess
 import threading
 import shlex
 import time
@@ -15,6 +18,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 
 from . import APP_NAME
 from .dependencies import is_flatpak, latest_yt_dlp_version, update_yt_dlp
+from .diagnostics import redact_sensitive_text
 from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import state_dir
 from .queue import QueueItem, QueueManager, extract_http_urls, is_playlist_url
@@ -83,6 +87,15 @@ class FetchWindow(Adw.ApplicationWindow):
         settings_button = Gtk.Button(icon_name="emblem-system-symbolic", tooltip_text="Settings")
         settings_button.connect("clicked", self._open_settings)
         header.pack_end(settings_button)
+        more_button = Gtk.MenuButton(icon_name="open-menu-symbolic", tooltip_text="More actions")
+        more_popover = Gtk.Popover()
+        more_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        diagnostics_button = Gtk.Button(label="Copy Diagnostics", has_frame=False)
+        diagnostics_button.connect("clicked", lambda *_: self._copy_diagnostics())
+        more_box.append(diagnostics_button)
+        more_popover.set_child(more_box)
+        more_button.set_popover(more_popover)
+        header.pack_end(more_button)
         self.toolbar.add_top_bar(header)
         self.connect("close-request", self._close_requested)
 
@@ -881,6 +894,10 @@ class FetchWindow(Adw.ApplicationWindow):
             action.set_sensitive(item.id not in self._updating_items)
             action.connect("clicked", lambda _button, key=item.id: self._queue_error_action(key))
             layout.append(action)
+        if item.status == "failed":
+            diagnostic_action = Gtk.Button(label="Copy Diagnostics")
+            diagnostic_action.connect("clicked", lambda _button, value=item: self._copy_diagnostics(value))
+            layout.append(diagnostic_action)
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         if item.status == "running":
             button = Gtk.Button(label="Pause")
@@ -1008,3 +1025,43 @@ class FetchWindow(Adw.ApplicationWindow):
             return
         except GLib.Error:
             Gio.AppInfo.launch_default_for_uri(path.parent.as_uri(), None)
+
+    def _copy_diagnostics(self, item: QueueItem | None = None) -> None:
+        if item is None:
+            item = next((value for value in reversed(self.queue_manager.items()) if value.command), None)
+        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg_version = "Not installed"
+        if ffmpeg:
+            try:
+                result = subprocess.run([ffmpeg, "-version"], capture_output=True, text=True, timeout=3, check=False)
+                ffmpeg_version = (result.stdout or result.stderr).splitlines()[0]
+            except (OSError, subprocess.TimeoutExpired, IndexError):
+                ffmpeg_version = "Version unavailable"
+        distro = "Unknown Linux"
+        try:
+            for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+                if line.startswith("PRETTY_NAME="):
+                    distro = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        except OSError:
+            pass
+        lines = [
+            f"Fetch: {APP_VERSION}",
+            f"yt-dlp: {binary_version('yt-dlp') or 'Not installed'} ({self.settings.values.get('yt_dlp_channel', 'stable')})",
+            f"Deno: {binary_version('deno') or 'Not installed'}",
+            f"ffmpeg: {ffmpeg_version}",
+            f"Distribution: {distro}",
+            f"Python: {platform.python_version()}",
+            f"GTK: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}",
+            f"libadwaita: {Adw.get_major_version()}.{Adw.get_minor_version()}.{Adw.get_micro_version()}",
+            f"Flatpak: {'Yes' if is_flatpak() else 'No'}",
+            "",
+            "yt-dlp command:",
+            redact_sensitive_text(item.command if item else ""),
+            "",
+            "Recent log:",
+            redact_sensitive_text("\n".join((item.logs if item else [])[-50:])),
+        ]
+        text = "\n".join(lines)
+        Gdk.Display.get_default().get_clipboard().set(text)
+        self.status_label.set_text("Diagnostics copied to the clipboard.")
