@@ -4,7 +4,7 @@ Fetch is a native Linux desktop frontend for [yt-dlp](https://github.com/yt-dlp/
 
 ## Release
 
-Fetch **1.1.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets Linux, with Fedora GNOME and Wayland as its reference desktop. The application ID is `com.iroddyan.fetch`.
+Fetch **1.2.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets Linux, with Fedora GNOME and Wayland as its reference desktop. The application ID is `com.iroddyan.fetch`.
 
 ## Features
 
@@ -130,7 +130,7 @@ sudo dnf install rpm-build
 The script writes the package to `~/rpmbuild/RPMS/noarch/`. For this release, install it with:
 
 ```sh
-sudo dnf install ~/rpmbuild/RPMS/noarch/fetch-1.1.0-1*.noarch.rpm
+sudo dnf install ~/rpmbuild/RPMS/noarch/fetch-1.2.0-1*.noarch.rpm
 ```
 
 DNF installs the runtime requirements declared by the RPM from your enabled repositories. Launch Fetch from the application menu or with `fetch`.
@@ -157,7 +157,7 @@ Fetch app releases are separate from yt-dlp updates. To update the managed yt-dl
 
 ## About
 
-- **App:** Fetch 1.1.0
+- **App:** Fetch 1.2.0
 - **Application ID:** `com.iroddyan.fetch`
 - **Creator and maintainer:** Iroddyan Waykins
 - **Development collaborator:** Codex (AI)

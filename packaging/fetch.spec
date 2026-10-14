@@ -1,5 +1,5 @@
 Name:           fetch
-Version:        1.1.0
+Version:        1.2.0
 Release:        1%{?dist}
 Summary:        Native desktop frontend for yt-dlp
 License:        MIT
@@ -40,3 +40,11 @@ install -m 0644 icons/hicolor/scalable/apps/com.iroddyan.fetch.svg %{buildroot}%
 %{_datadir}/applications/com.iroddyan.fetch.desktop
 %{_datadir}/metainfo/com.iroddyan.fetch.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/com.iroddyan.fetch.svg
+
+%changelog
+* Wed Oct 14 2026 Iroddyan <iroddyan@gmail.com> - 1.2.0-1
+- Make core path and queue modules testable without PyGObject
+- Add queue lifecycle and engine helper tests
+- Correct install and pause documentation
+- Retry failed yt-dlp update checks hourly
+- Detect YouTube video links that include playlist parameters
