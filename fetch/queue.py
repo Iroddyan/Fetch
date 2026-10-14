@@ -432,6 +432,7 @@ class QueueManager:
                 embed_metadata=bool(options.get("embed_metadata", True)),
                 embed_thumbnail=bool(options.get("embed_thumbnail", True)),
                 include_media_id=bool(options.get("include_media_id", False)),
+                album_layout=bool(options.get("album_layout", False)),
                 custom_arguments=str(options.get("custom_arguments") or ""),
             )
             with self._lock:

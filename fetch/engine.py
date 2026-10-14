@@ -205,6 +205,15 @@ def _filename_template(is_playlist: bool, audio_format: str | None, include_medi
     return title_template
 
 
+def _playlist_output_template(album_layout: bool, include_media_id: bool = False) -> str:
+    if not album_layout:
+        return _filename_template(True, "m4a", include_media_id)
+    template = "%(album_artist,artist|Unknown Artist)s/%(album,playlist_title|Playlist)s/%(track_number,playlist_index)02d - %(title|Untitled)s"
+    if include_media_id:
+        template += " [%(id)s]"
+    return template
+
+
 def inspect_url(
     url: str,
     options: dict[str, object] | None = None,
@@ -347,6 +356,7 @@ def download_url(
     embed_metadata: bool = True,
     embed_thumbnail: bool = True,
     include_media_id: bool = False,
+    album_layout: bool = False,
     custom_arguments: str = "",
 ) -> tuple[int, str]:
     if audio_format:
@@ -383,7 +393,11 @@ def download_url(
         "retry_count": retry_count,
         "no_playlist": no_playlist,
     }
-    filename_template = _filename_template(is_playlist, audio_format, include_media_id)
+    filename_template = (
+        _playlist_output_template(True, include_media_id)
+        if album_layout and is_playlist and audio_format
+        else _filename_template(is_playlist, audio_format, include_media_id)
+    )
     command.extend(_base_args(base_options))
     command.extend([
         "--no-warnings",
@@ -411,6 +425,8 @@ def download_url(
         command.append("--embed-chapters")
     if playlist_items:
         command.extend(["--playlist-items", playlist_items])
+    if album_layout and is_playlist and audio_format:
+        command.extend(["--parse-metadata", "%(playlist_index)s:%(track_number)s"])
     if rate_limit:
         command.extend(["--limit-rate", rate_limit])
     if archive_file:

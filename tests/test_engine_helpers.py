@@ -55,6 +55,15 @@ def test_audio_format_spec_prefers_native_streams() -> None:
     assert engine._audio_format_spec(None) == "bestaudio/best"
 
 
+def test_album_layout_template_uses_artist_album_and_numbered_track() -> None:
+    assert engine._playlist_output_template(True) == (
+        "%(album_artist,artist|Unknown Artist)s/%(album,playlist_title|Playlist)s/"
+        "%(track_number,playlist_index)02d - %(title|Untitled)s"
+    )
+    assert engine._playlist_output_template(True, True).endswith("[%(id)s]")
+    assert engine._playlist_output_template(False) == engine._filename_template(True, "m4a", False)
+
+
 def test_parse_done_line_with_unicode_and_spaced_path() -> None:
     event = engine._parse_done_line('FETCH_DONE:{"filepath":"/tmp/Música/My Song.m4a","artist":"Beyoncé","title":"Song","album":"Álbum","duration":211}')
     assert event == {

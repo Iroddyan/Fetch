@@ -634,6 +634,13 @@ class FetchWindow(Adw.ApplicationWindow):
         self.playlist_audio_format.set_selected(2)
         options.append(self.playlist_audio_format)
         body.append(options)
+        self.album_layout_check = Gtk.CheckButton(label="Album layout")
+        self.album_layout_check.set_tooltip_text("Organize playlist audio into artist and album folders, with numbered tracks.")
+        self.album_layout_check.set_sensitive(self.playlist_audio_check.get_active())
+        self.playlist_audio_check.connect(
+            "toggled", lambda check: self.album_layout_check.set_sensitive(check.get_active())
+        )
+        body.append(self.album_layout_check)
         self.playlist_subtitles_check = Gtk.CheckButton(label="Download subtitles")
         self.playlist_languages_entry = Gtk.Entry(placeholder_text="Languages, e.g. en,ja", hexpand=True)
         self.playlist_languages_entry.set_sensitive(False)
@@ -681,6 +688,7 @@ class FetchWindow(Adw.ApplicationWindow):
                 "format_spec": "" if audio_only else "bestvideo*+bestaudio/best",
                 "audio_format": audio_formats[fmt_idx] if audio_only else "",
                 "is_playlist": True,
+                "album_layout": audio_only and self.album_layout_check.get_active(),
                 "playlist_items": playlist_items,
                 "subtitle_languages": subtitles,
                 "embed_subtitles": self.playlist_embed_subtitles_check.get_active(),
