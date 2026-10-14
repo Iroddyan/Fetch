@@ -49,6 +49,26 @@ def test_audio_format_spec_prefers_native_streams() -> None:
     assert engine._audio_format_spec(None) == "bestaudio/best"
 
 
+def test_parse_done_line_with_unicode_and_spaced_path() -> None:
+    event = engine._parse_done_line('FETCH_DONE:{"filepath":"/tmp/Música/My Song.m4a","artist":"Beyoncé","title":"Song","album":"Álbum","duration":211}')
+    assert event == {
+        "type": "done", "output_path": "/tmp/Música/My Song.m4a", "artist": "Beyoncé",
+        "title": "Song", "album": "Álbum", "duration": 211.0,
+    }
+
+
+@pytest.mark.parametrize("line", ["ordinary output", "FETCH_DONE:{bad json}", "FETCH_DONE:[]", 'FETCH_DONE:{"title":"no path"}'])
+def test_parse_done_line_rejects_invalid_or_missing_path(line: str) -> None:
+    assert engine._parse_done_line(line) is None
+
+
+def test_parse_done_line_allows_missing_optional_metadata() -> None:
+    assert engine._parse_done_line('FETCH_DONE:{"filepath":"/tmp/track.m4a"}') == {
+        "type": "done", "output_path": "/tmp/track.m4a", "artist": "", "title": "",
+        "album": "", "duration": None,
+    }
+
+
 @pytest.mark.skipif(shutil.which("yt-dlp") is None, reason="yt-dlp is not installed")
 def test_m4a_selector_chooses_aac_in_synthetic_info_json(tmp_path: Path) -> None:
     info = {

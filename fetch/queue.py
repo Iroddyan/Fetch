@@ -51,6 +51,11 @@ class QueueItem:
     logged_errors: list[str] = field(default_factory=list)
     command: str = ""
     logs: list[str] = field(default_factory=list)
+    output_path: str = ""
+    artist: str = ""
+    media_title: str = ""
+    album: str = ""
+    duration: float | None = None
     updated_at: float = field(default_factory=time.time)
 
     @classmethod
@@ -482,7 +487,14 @@ class QueueManager:
             item = self._get(item_id)
             if not item:
                 return
-            if event.get("type") == "progress":
+            if event.get("type") == "done":
+                item.output_path = str(event.get("output_path") or item.output_path)
+                item.artist = str(event.get("artist") or "")
+                item.media_title = str(event.get("title") or "")
+                item.album = str(event.get("album") or "")
+                value = event.get("duration")
+                item.duration = float(value) if isinstance(value, (int, float)) else None
+            elif event.get("type") == "progress":
                 index = event.get("playlist_index")
                 count = event.get("playlist_count")
                 if isinstance(index, int) and index != item.playlist_index:

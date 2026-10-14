@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from fetch import queue
@@ -42,4 +43,21 @@ def test_audio_queue_options_use_engine_audio_selector(tmp_path: Path, monkeypat
     manager.add("https://example.test/audio", "Audio", {"audio_format": "m4a", "format_spec": "wrong"})
 
     assert manager.items()[0].options["format_spec"] == "bestaudio[ext=m4a]/bestaudio/best"
+
+
+def test_queue_stores_and_persists_finished_file_metadata(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(queue, "state_dir", lambda: tmp_path)
+    manager = QueueManager(destination=lambda: tmp_path, scheduler=lambda *_args: None)
+    item_id = manager.add("https://example.test/video", "Queue label", {"format_spec": "best"})
+    manager._handle_event(item_id, {
+        "type": "done", "output_path": "/tmp/Música/My Song.m4a", "artist": "Beyoncé",
+        "title": "Song", "album": "Álbum", "duration": 211.0,
+    })
+    manager.shutdown(clear_queue=False)
+    stored = json.loads((tmp_path / "queue.json").read_text(encoding="utf-8"))[0]
+    assert stored["output_path"] == "/tmp/Música/My Song.m4a"
+    assert stored["artist"] == "Beyoncé"
+    assert stored["media_title"] == "Song"
+    assert stored["album"] == "Álbum"
+    assert stored["duration"] == 211.0
     manager.shutdown()

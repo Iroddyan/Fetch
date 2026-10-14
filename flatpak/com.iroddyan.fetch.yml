@@ -13,6 +13,7 @@ finish-args:
   - --talk-name=org.freedesktop.portal.Desktop
   - --talk-name=org.freedesktop.portal.FileChooser
   - --talk-name=org.freedesktop.portal.Documents
+  - --talk-name=org.freedesktop.FileManager1
 modules:
   - name: fetch
     buildsystem: simple

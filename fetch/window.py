@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import shlex
 import time
@@ -787,8 +788,8 @@ class FetchWindow(Adw.ApplicationWindow):
         command_button.connect("clicked", lambda _button, value=item: self._show_text_window("yt-dlp command", value.command))
         buttons.append(command_button)
         if item.status in {"completed", "completed_with_errors"}:
-            folder_button = Gtk.Button(label="Show in Files", icon_name="folder-open-symbolic")
-            folder_button.connect("clicked", self._open_download_folder)
+            folder_button = Gtk.Button(label="Show in folder", icon_name="folder-open-symbolic")
+            folder_button.connect("clicked", lambda _button, path=item.output_path: self._show_output_path(path))
             buttons.append(folder_button)
         layout.append(buttons)
         row.set_child(layout)
@@ -844,5 +845,47 @@ class FetchWindow(Adw.ApplicationWindow):
         window.set_child(box)
         window.present()
 
-    def _open_download_folder(self, _button: Gtk.Button) -> None:
-        Gio.AppInfo.launch_default_for_uri(self.settings.download_directory.as_uri(), None)
+    def _show_output_path(self, output_path: str) -> None:
+        path = Path(output_path)
+        if not path.is_file():
+            self.status_label.set_text("The downloaded file could not be found.")
+            return
+        try:
+            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            file_descriptor = os.open(path, os.O_RDONLY)
+            try:
+                fd_list = Gio.UnixFDList.new()
+                handle = fd_list.append(file_descriptor)
+                bus.call_with_unix_fd_list_sync(
+                    "org.freedesktop.portal.Desktop",
+                    "/org/freedesktop/portal/desktop",
+                    "org.freedesktop.portal.OpenURI",
+                    "OpenDirectory",
+                    GLib.Variant("(sha{sv})", ("", handle, {})),
+                    GLib.VariantType.new("(o)"),
+                    Gio.DBusCallFlags.NONE,
+                    5000,
+                    fd_list,
+                    None,
+                    None,
+                )
+            finally:
+                os.close(file_descriptor)
+            return
+        except (GLib.Error, OSError, TypeError):
+            pass
+        try:
+            bus.call_sync(
+                "org.freedesktop.FileManager1",
+                "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1",
+                "ShowItems",
+                GLib.Variant("(ass)", ([path.as_uri()], "")),
+                None,
+                Gio.DBusCallFlags.NONE,
+                3000,
+                None,
+            )
+            return
+        except GLib.Error:
+            Gio.AppInfo.launch_default_for_uri(path.parent.as_uri(), None)

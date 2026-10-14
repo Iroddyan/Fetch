@@ -7,6 +7,7 @@ import signal
 import shutil
 import shlex
 import subprocess
+import tempfile
 import threading
 import time
 from urllib.parse import parse_qs, urlsplit
@@ -155,6 +156,40 @@ def _audio_format_spec(audio_format: str | None) -> str:
     if selected == "opus":
         return "bestaudio[acodec=opus]/bestaudio/best"
     return "bestaudio/best"
+
+
+def _parse_done_line(line: str) -> dict[str, object] | None:
+    """Parse yt-dlp's after_move record without trusting malformed output."""
+    marker = "FETCH_DONE:"
+    position = line.find(marker)
+    if position < 0:
+        return None
+    try:
+        value = json.loads(line[position + len(marker):])
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(value, dict):
+        return None
+    path = value.get("filepath")
+    if not isinstance(path, str) or not path:
+        return None
+    duration = value.get("duration")
+    try:
+        duration = float(duration) if duration not in (None, "NA", "") else None
+    except (TypeError, ValueError):
+        duration = None
+    return {
+        "type": "done",
+        "output_path": path,
+        "artist": _metadata_text(value.get("artist")),
+        "title": _metadata_text(value.get("title")),
+        "album": _metadata_text(value.get("album")),
+        "duration": duration,
+    }
+
+
+def _metadata_text(value: object) -> str:
+    return str(value) if value not in (None, "NA") else ""
 
 
 def _filename_template(is_playlist: bool, audio_format: str | None, include_media_id: bool) -> str:
@@ -334,6 +369,11 @@ def download_url(
                 "install_ffmpeg",
             ))
     destination.mkdir(parents=True, exist_ok=True)
+    done_dir = cache_dir()
+    done_dir.mkdir(parents=True, exist_ok=True)
+    done_fd, done_file_name = tempfile.mkstemp(prefix="fetch-done-", suffix=".jsonl", dir=done_dir)
+    os.close(done_fd)
+    done_file = Path(done_file_name)
     command = [executable]
     base_options = {
         "use_yt_dlp_config": use_yt_dlp_config,
@@ -360,6 +400,9 @@ def download_url(
         filename_template + ".%(ext)s",
         "--paths",
         str(destination),
+        "--print-to-file",
+        "after_move:FETCH_DONE:%(.{filepath,artist,title,album,duration})j",
+        str(done_file),
     ])
     command.extend(_quality_args(quality_preference, max_resolution, audio_only=bool(audio_format)))
     if audio_format:
@@ -420,11 +463,20 @@ def download_url(
                         output({"type": "log", "message": line})
                     else:
                         output(event)
-        return process.wait(), rendered_command
+        return_code = process.wait()
+        try:
+            for line in done_file.read_text(encoding="utf-8").splitlines():
+                event = _parse_done_line(line)
+                if event:
+                    output(event)
+        except OSError:
+            pass
+        return return_code, rendered_command
     except OSError as error:
         raise EngineError(f"Fetch couldn’t start yt-dlp: {error}") from error
     finally:
         register_process(None)
+        done_file.unlink(missing_ok=True)
 
 
 def _progress_event(line: str) -> dict[str, object] | None:
