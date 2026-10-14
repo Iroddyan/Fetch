@@ -39,8 +39,13 @@ def test_quality_args_order_preserves_h264_preference_and_applies_resolution_cap
 
 def test_is_video_playlist_url_and_base_no_playlist_flag() -> None:
     assert engine._is_video_playlist_url("https://www.youtube.com/watch?v=video&list=playlist")
+    assert engine._is_video_playlist_url("https://youtu.be/video?list=playlist")
+    assert engine._is_video_playlist_url("https://music.youtube.com/watch?v=video&list=playlist")
+    assert engine._is_video_playlist_url("https://youtube.com/watch?list=playlist&v=video")
     assert not engine._is_video_playlist_url("https://www.youtube.com/playlist?list=playlist")
     assert not engine._is_video_playlist_url("https://www.youtube.com/watch?v=video")
+    assert not engine._is_video_playlist_url("https://youtu.be/video")
+    assert not engine._is_video_playlist_url("https://example.com/watch?v=video&list=playlist")
     assert "--no-playlist" in engine._base_args({"no_playlist": True})
     assert "--no-playlist" not in engine._base_args({"no_playlist": False})
 

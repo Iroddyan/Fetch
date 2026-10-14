@@ -122,8 +122,18 @@ def _base_args(options: dict[str, object] | None = None) -> list[str]:
 
 
 def _is_video_playlist_url(url: str) -> bool:
-    query = parse_qs(urlsplit(url).query)
-    return bool(query.get("v", [""])[0] and query.get("list", [""])[0])
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    host = (parsed.hostname or "").lower()
+    query = parse_qs(parsed.query)
+    has_playlist = bool(query.get("list", [""])[0])
+    if host in {"youtube.com", "www.youtube.com", "music.youtube.com", "m.youtube.com"}:
+        return parsed.path.rstrip("/") == "/watch" and bool(query.get("v", [""])[0]) and has_playlist
+    if host in {"youtu.be", "www.youtu.be"}:
+        return bool(parsed.path.strip("/")) and has_playlist
+    return False
 
 
 def _quality_args(quality_preference: str, max_resolution: str, *, audio_only: bool = False) -> list[str]:
