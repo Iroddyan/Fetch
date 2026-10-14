@@ -14,6 +14,9 @@
     <name>Iroddyan Waykins</name>
   </developer>
   <releases>
+    <release version="1.3.0" date="2026-10-14">
+      <description><p>Music-first M4A downloads now prefer native AAC streams. Music and Video presets, quick add, multi-link paste, command-line URL handling, and drag-and-drop make queueing faster. Playlist audio can use numbered album folders, synced LRCLIB lyrics are optional, and completed downloads offer Show in folder. Copy Diagnostics helps with troubleshooting.</p></description>
+    </release>
     <release version="1.2.0" date="2026-10-14">
       <description><p>Core path and queue modules now work without PyGObject for headless testing. Queue lifecycle coverage, corrected install and pause guidance, hourly retries for failed yt-dlp update checks, and detection of YouTube video URLs that include playlist parameters improve reliability.</p></description>
     </release>

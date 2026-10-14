@@ -4,7 +4,7 @@ Fetch is a native Linux desktop frontend for [yt-dlp](https://github.com/yt-dlp/
 
 ## Release
 
-Fetch **1.2.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets Linux, with Fedora GNOME and Wayland as its reference desktop. The application ID is `com.iroddyan.fetch`.
+Fetch **1.3.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets Linux, with Fedora GNOME and Wayland as its reference desktop. The application ID is `com.iroddyan.fetch`.
 
 ## Features
 
@@ -13,11 +13,17 @@ Fetch **1.2.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets 
 - Best-quality and audio-only downloads, subtitles, chapters, metadata, thumbnail embedding, and SponsorBlock.
 - Queue with concurrency limits, structured progress, speed and ETA, pause/resume from partial files, cancel, retry, and a Clear Queue action. Pause stops yt-dlp; resume relaunches it so it can continue from partial files. By default, the queue is cleared when Fetch closes; this can be changed in Settings → Downloads.
 - Music downloads default to M4A, embedded square artwork, and `Artist - Title` filenames without the media ID. Playlist music uses the same filenames as standalone tracks. Settings → Media lets you change artwork embedding or include IDs.
+- Built-in Music and Video presets; Music is selected on a fresh install and prefers native AAC/M4A streams to avoid unnecessary re-encoding.
+- Quick Add queues a URL with the active preset when enabled. Paste accepts multiple lines, queues unique HTTP(S) links, and reports skipped entries; links and selected text can also be dragged onto the app.
+- The `fetch URL [URL…]` command forwards URLs to the running app. `fetch --version` and `fetch --help` are available, and desktop URL launches use the same queue path.
+- Playlist audio can optionally use Album layout: artist and album folders with numbered tracks. The default playlist music layout remains unchanged.
+- Failed queue items and the app menu offer Copy Diagnostics, with cookie paths and proxy credentials removed.
+- Optional synced `.lrc` lyrics sidecars. When enabled, Fetch sends artist, title, album, and duration to LRCLIB (`lrclib.net`) and writes synced lyrics only without overwriting an existing file.
+- Completed queue items can open their containing folder and select the downloaded file when supported by the desktop.
 - Direct, checksum-verified updates for the official yt-dlp and Deno Linux builds, independent of app updates. System-provided tools remain supported.
 - Dependency status for yt-dlp, ffmpeg, ffprobe, and Deno, with yt-dlp errors and command logs available from the queue.
 - Cookies.txt import and browser-cookie selection, optional yt-dlp configuration, download archive, proxy and speed limits, retries, and raw yt-dlp arguments.
 - Optional desktop notifications and clipboard link offers. Clipboard monitoring is off by default and never starts downloads automatically.
-- Optional synced `.lrc` lyrics sidecars. When enabled, Fetch sends the track’s artist, title, album, and duration to LRCLIB (`lrclib.net`); it saves synced lyrics only and never overwrites an existing sidecar.
 - Flatpak manifest and Fedora RPM spec for distribution.
 
 Tests use only the Python standard library plus pytest. In a Python environment, install pytest with `python -m pip install pytest`, then run `python -m pytest`.
@@ -30,6 +36,15 @@ Run from the checkout with:
 
 ```sh
 ./run-fetch
+```
+
+Pass one or more links to queue them directly, or use `--version` / `--help`:
+
+```sh
+./run-fetch 'https://www.youtube.com/watch?v=VIDEO_ID'
+./run-fetch 'https://example.com/one' 'https://example.com/two'
+./run-fetch --version
+./run-fetch --help
 ```
 
 On Fedora, the Python runtime must be able to import `gi`, and GTK 4 and libadwaita introspection data must be installed.
@@ -131,7 +146,7 @@ sudo dnf install rpm-build
 The script writes the package to `~/rpmbuild/RPMS/noarch/`. For this release, install it with:
 
 ```sh
-sudo dnf install ~/rpmbuild/RPMS/noarch/fetch-1.2.0-1*.noarch.rpm
+sudo dnf install ~/rpmbuild/RPMS/noarch/fetch-1.3.0-1*.noarch.rpm
 ```
 
 DNF installs the runtime requirements declared by the RPM from your enabled repositories. Launch Fetch from the application menu or with `fetch`.
@@ -158,7 +173,7 @@ Fetch app releases are separate from yt-dlp updates. To update the managed yt-dl
 
 ## About
 
-- **App:** Fetch 1.2.0
+- **App:** Fetch 1.3.0
 - **Application ID:** `com.iroddyan.fetch`
 - **Creator and maintainer:** Iroddyan Waykins
 - **Development collaborator:** Codex (AI)

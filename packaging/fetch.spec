@@ -1,5 +1,5 @@
 Name:           fetch
-Version:        1.2.0
+Version:        1.3.0
 Release:        1%{?dist}
 Summary:        Native desktop frontend for yt-dlp
 License:        MIT
@@ -42,6 +42,13 @@ install -m 0644 icons/hicolor/scalable/apps/com.iroddyan.fetch.svg %{buildroot}%
 %{_datadir}/icons/hicolor/scalable/apps/com.iroddyan.fetch.svg
 
 %changelog
+* Wed Oct 14 2026 Iroddyan <iroddyan@gmail.com> - 1.3.0-1
+- Add a Music preset that prefers native AAC/M4A audio, plus a Video preset
+- Add quick add, multi-link paste, command-line URL handling, and drag-and-drop
+- Add optional numbered album folders for playlist audio
+- Add optional LRCLIB synced lyrics sidecars
+- Capture finished file metadata, show files in their folder, and copy redacted diagnostics
+
 * Wed Oct 14 2026 Iroddyan <iroddyan@gmail.com> - 1.2.0-1
 - Make core path and queue modules testable without PyGObject
 - Add queue lifecycle and engine helper tests
