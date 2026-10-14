@@ -1,0 +1,21 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Test without PyGObject
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install pytest
+          python -m compileall fetch
+          python -m pytest
