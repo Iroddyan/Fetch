@@ -293,6 +293,9 @@ class FetchWindow(Adw.ApplicationWindow):
         skipped_label = f" ({skipped} skipped)" if skipped else ""
         self.status_label.set_text(f"Queued {len(urls)} {count_label}{skipped_label}.")
 
+    def queue_urls(self, urls: list[str], skipped: int = 0) -> None:
+        self._queue_quick_links(urls, skipped)
+
     def _open_settings(self, _button: Gtk.Button | None = None) -> None:
         self._open_settings_page("")
 

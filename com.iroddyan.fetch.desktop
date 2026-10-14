@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Fetch
 Comment=Download media with clear controls and a native queue
-Exec=fetch
+Exec=fetch %U
 Icon=com.iroddyan.fetch
 Terminal=false
 Type=Application
