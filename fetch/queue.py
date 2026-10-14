@@ -294,7 +294,10 @@ class QueueManager:
             if not self._started or self._closed:
                 return
             available = self.concurrency - len(self._active)
-            pending = [item for item in self._items if item.status == "waiting"][:available]
+            pending = [
+                item for item in self._items
+                if item.status == "waiting" and item.id not in self._active
+            ][:available]
             for item in pending:
                 item.status = "running"
                 item.error = ""

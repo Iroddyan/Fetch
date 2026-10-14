@@ -26,6 +26,25 @@ def test_progress_event_unknown_total_is_indeterminate() -> None:
     assert event["indeterminate"] is True
 
 
+def test_quality_args_order_preserves_h264_preference_and_applies_resolution_cap() -> None:
+    compatible = engine._quality_args("compatible", "")
+    assert compatible == ["-S", "vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac", "--merge-output-format", "mp4"]
+    compatible_capped = engine._quality_args("compatible", "720")
+    assert compatible_capped[:4] == compatible
+    assert compatible_capped[4:] == ["-S", "res:720"]
+    assert engine._quality_args("best", "") == []
+    assert engine._quality_args("best", "1080") == ["-S", "res:1080"]
+    assert engine._quality_args("compatible", "720", audio_only=True) == []
+
+
+def test_is_video_playlist_url_and_base_no_playlist_flag() -> None:
+    assert engine._is_video_playlist_url("https://www.youtube.com/watch?v=video&list=playlist")
+    assert not engine._is_video_playlist_url("https://www.youtube.com/playlist?list=playlist")
+    assert not engine._is_video_playlist_url("https://www.youtube.com/watch?v=video")
+    assert "--no-playlist" in engine._base_args({"no_playlist": True})
+    assert "--no-playlist" not in engine._base_args({"no_playlist": False})
+
+
 def test_format_list_deduplicates_and_labels_formats() -> None:
     result = engine._format_list([
         {"format_id": "137", "height": 1080, "ext": "mp4", "vcodec": "avc1", "acodec": "none"},

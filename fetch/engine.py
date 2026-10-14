@@ -133,6 +133,7 @@ def _quality_args(quality_preference: str, max_resolution: str, *, audio_only: b
     if quality_preference == "compatible":
         args.extend(["-S", "vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac", "--merge-output-format", "mp4"])
     if max_resolution in {"2160", "1440", "1080", "720", "480"}:
+        # Keep the compatibility sort first; the later res:N sort applies the cap.
         args.extend(["-S", f"res:{max_resolution}"])
     return args
 
