@@ -17,7 +17,7 @@ from . import APP_NAME
 from .dependencies import is_flatpak, latest_yt_dlp_version, update_yt_dlp
 from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import state_dir
-from .queue import QueueItem, QueueManager
+from .queue import QueueItem, QueueManager, extract_http_urls, is_playlist_url
 from .settings import Settings, resolve_preset, should_check_yt_dlp_update
 from .settings_pages import SettingsWindow
 
@@ -126,11 +126,14 @@ class FetchWindow(Adw.ApplicationWindow):
         url_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.url_entry = Gtk.Entry(hexpand=True, placeholder_text="Paste a URL")
         self.url_entry.set_activates_default(True)
-        self.url_entry.connect("activate", self._inspect)
+        self.url_entry.connect("activate", self._submit_url)
         self.url_entry.connect("changed", self._url_changed)
         self.inspect_button = Gtk.Button(label="Inspect", css_classes=["suggested-action"])
         self.inspect_button.connect("clicked", self._inspect)
         url_row.append(self.url_entry)
+        paste_entry_button = Gtk.Button(label="Paste", tooltip_text="Paste links from the clipboard")
+        paste_entry_button.connect("clicked", self._paste_from_clipboard)
+        url_row.append(paste_entry_button)
         url_row.append(self.inspect_button)
         self.cancel_inspect_button = Gtk.Button(label="Cancel")
         self.cancel_inspect_button.connect("clicked", self._cancel_inspection)
@@ -234,9 +237,61 @@ class FetchWindow(Adw.ApplicationWindow):
 
     def _paste_detected_link(self, _button: Gtk.Button) -> None:
         if self._last_clipboard_url:
-            self.url_entry.set_text(self._last_clipboard_url)
             self.clipboard_revealer.set_reveal_child(False)
+            self._process_pasted_text(self._last_clipboard_url)
+
+    def _paste_from_clipboard(self, _button: Gtk.Button) -> None:
+        Gdk.Display.get_default().get_clipboard().read_text_async(None, self._paste_text_ready, None)
+
+    def _paste_text_ready(self, clipboard: Gdk.Clipboard, result: Gio.AsyncResult, _data: object) -> None:
+        try:
+            value = clipboard.read_text_finish(result) or ""
+        except GLib.Error:
+            value = ""
+        self._process_pasted_text(value)
+
+    def _submit_url(self, *_args: object) -> None:
+        value = self.url_entry.get_text().strip()
+        urls, skipped = extract_http_urls(value)
+        if not urls:
+            self.status_label.set_text("Enter a valid http or https link.")
+        elif len(urls) > 1:
+            self._queue_quick_links(urls, skipped)
+        elif self.settings.values.get("quick_add", True):
+            self._queue_quick_links(urls, skipped)
+        else:
             self._inspect()
+
+    def _process_pasted_text(self, value: str) -> None:
+        urls, skipped = extract_http_urls(value)
+        if not urls:
+            self.status_label.set_text("The clipboard doesn’t contain a valid http or https link.")
+        elif len(urls) > 1 or self.settings.values.get("quick_add", True):
+            self._queue_quick_links(urls, skipped)
+        else:
+            self.url_entry.set_text(urls[0])
+            self._inspect()
+
+    def _queue_quick_links(self, urls: list[str], skipped: int = 0) -> None:
+        try:
+            advanced = self._advanced_options()
+        except ValueError as error:
+            self._show_error(str(error))
+            return
+        preset = resolve_preset(self._selected_preset())
+        for url in urls:
+            options = dict(advanced)
+            options.update({key: value for key, value in preset.items() if key != "preset" and value is not None})
+            options["preset"] = preset["preset"]
+            options["is_playlist"] = is_playlist_url(url) and not _is_video_playlist_url(url)
+            options["no_playlist"] = _is_video_playlist_url(url)
+            if preset["embed_metadata"] is not None:
+                options["embed_metadata"] = preset["embed_metadata"]
+                options["embed_thumbnail"] = preset["embed_thumbnail"]
+            self.queue_manager.add(url, url, options)
+        count_label = "link" if len(urls) == 1 else "links"
+        skipped_label = f" ({skipped} skipped)" if skipped else ""
+        self.status_label.set_text(f"Queued {len(urls)} {count_label}{skipped_label}.")
 
     def _open_settings(self, _button: Gtk.Button | None = None) -> None:
         self._open_settings_page("")

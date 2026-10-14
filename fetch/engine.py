@@ -391,9 +391,9 @@ def download_url(
         "--progress-delta",
         "0.5",
         "--progress-template",
-        "download:FETCH_PROGRESS\t%(progress.status)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(progress.speed)s\t%(progress.eta)s\t%(info.playlist_index)s\t%(info.n_entries)s\t%(info.vcodec)s\t%(info.acodec)s",
+        "download:FETCH_PROGRESS\t%(progress.status)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(progress.speed)s\t%(progress.eta)s\t%(info.playlist_index)s\t%(info.n_entries)s\t%(info.vcodec)s\t%(info.acodec)s\tNA\t%(info.title)s",
         "--progress-template",
-        "postprocess:FETCH_PROGRESS\t%(progress.status)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(progress.speed)s\t%(progress.eta)s\tNA\tNA\tNA\tNA\tMerging",
+        "postprocess:FETCH_PROGRESS\t%(progress.status)s\t%(progress.downloaded_bytes)s\t%(progress.total_bytes)s\t%(progress.total_bytes_estimate)s\t%(progress.speed)s\t%(progress.eta)s\tNA\tNA\tNA\tNA\tMerging\t%(info.title)s",
         "--format",
         format_spec,
         "--output",
@@ -484,7 +484,7 @@ def _progress_event(line: str) -> dict[str, object] | None:
     position = line.find(marker)
     if position < 0:
         return None
-    fields = line[position + len(marker):].split("\t")
+    fields = line[position + len(marker):].split("\t", 11)
     if len(fields) < 6:
         return None
     status, downloaded, total, estimate, speed, eta = fields[:6]
@@ -493,6 +493,7 @@ def _progress_event(line: str) -> dict[str, object] | None:
     vcodec = fields[8].lower() if len(fields) > 8 else ""
     acodec = fields[9].lower() if len(fields) > 9 else ""
     stage = fields[10] if len(fields) > 10 else ""
+    title = fields[11] if len(fields) > 11 else ""
     if not stage or stage == "NA":
         if vcodec not in {"", "na", "none"} and acodec in {"", "na", "none"}:
             stage = "Video"
@@ -516,6 +517,7 @@ def _progress_event(line: str) -> dict[str, object] | None:
         "stage": stage,
         "indeterminate": percent is None,
         "message": "Processing media…" if status == "finished" else "Downloading…",
+        "title": "" if title in {"NA", "None"} else title,
     }
 
 

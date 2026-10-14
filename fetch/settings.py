@@ -67,6 +67,7 @@ class Settings:
             "notifications_enabled": True,
             "clipboard_offer": False,
             "download_preset": "Music",
+            "quick_add": True,
         }
         self.load()
 
@@ -85,6 +86,10 @@ class Settings:
                     self.values["settings_page"] = loaded["settings_page"]
                 if isinstance(loaded.get("download_preset"), str) and loaded["download_preset"] in {"Music", "Video"}:
                     self.values["download_preset"] = loaded["download_preset"]
+                if isinstance(loaded.get("quick_add"), bool):
+                    self.values["quick_add"] = loaded["quick_add"]
+                elif self.values["download_preset"] == "Video":
+                    self.values["quick_add"] = False
                 if isinstance(loaded.get("queue_concurrency"), int):
                     self.values["queue_concurrency"] = max(1, min(4, loaded["queue_concurrency"]))
                 if isinstance(loaded.get("quality_preference"), str) and loaded["quality_preference"] in {"compatible", "best"}:

@@ -60,4 +60,16 @@ def test_queue_stores_and_persists_finished_file_metadata(tmp_path: Path, monkey
     assert stored["media_title"] == "Song"
     assert stored["album"] == "Álbum"
     assert stored["duration"] == 211.0
+
+
+def test_queue_replaces_url_label_when_progress_has_real_title(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(queue, "state_dir", lambda: tmp_path)
+    manager = QueueManager(destination=lambda: tmp_path, scheduler=lambda *_args: None)
+    item_id = manager.add("https://example.test/video", "https://example.test/video", {})
+    manager._handle_event(item_id, {
+        "type": "progress", "title": "A real title", "percent": 15.0,
+        "indeterminate": False, "playlist_index": 1, "playlist_count": 1,
+    })
+    assert manager.items()[0].title == "A real title"
+    manager.shutdown(clear_queue=True)
     manager.shutdown()

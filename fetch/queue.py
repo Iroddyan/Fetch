@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 import uuid
+from urllib.parse import parse_qs, urlsplit
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -14,6 +15,36 @@ from typing import Callable
 
 from .engine import EngineError, _audio_format_spec, _friendly_error, download_url
 from .paths import state_dir
+
+
+def extract_http_urls(text: str) -> tuple[list[str], int]:
+    """Return unique valid HTTP(S) URLs and the number of ignored nonblank lines."""
+    urls: list[str] = []
+    seen: set[str] = set()
+    skipped = 0
+    for line in text.splitlines():
+        url = line.strip()
+        if not url:
+            continue
+        try:
+            parsed = urlsplit(url)
+            valid = parsed.scheme.lower() in {"http", "https"} and bool(parsed.hostname)
+        except ValueError:
+            valid = False
+        if not valid or url in seen:
+            skipped += 1
+            continue
+        seen.add(url)
+        urls.append(url)
+    return urls, skipped
+
+
+def is_playlist_url(url: str) -> bool:
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    return parsed.path.rstrip("/").endswith("/playlist") or bool(parse_qs(parsed.query).get("list", [""])[0])
 
 
 def _is_error_line(message: str) -> bool:
@@ -491,10 +522,15 @@ class QueueManager:
                 item.output_path = str(event.get("output_path") or item.output_path)
                 item.artist = str(event.get("artist") or "")
                 item.media_title = str(event.get("title") or "")
+                if item.media_title:
+                    item.title = item.media_title
                 item.album = str(event.get("album") or "")
                 value = event.get("duration")
                 item.duration = float(value) if isinstance(value, (int, float)) else None
             elif event.get("type") == "progress":
+                title = event.get("title")
+                if isinstance(title, str) and title:
+                    item.title = title
                 index = event.get("playlist_index")
                 count = event.get("playlist_count")
                 if isinstance(index, int) and index != item.playlist_index:

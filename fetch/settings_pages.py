@@ -40,6 +40,15 @@ class SettingsWindow(Adw.PreferencesWindow):
         folder_group.add(folder_row)
         downloads.add(folder_group)
 
+        quick_add_group = Adw.PreferencesGroup(title="Quick Add")
+        self._add_switch(
+            quick_add_group,
+            "Quick Add",
+            "Queue links immediately when you press Enter or Paste. The initial default follows your first preset choice.",
+            "quick_add",
+        )
+        downloads.add(quick_add_group)
+
         queue_group = Adw.PreferencesGroup(title="Queue")
         concurrency_row = Adw.ActionRow(
             title="Simultaneous Downloads",

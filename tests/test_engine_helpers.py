@@ -30,6 +30,12 @@ def test_progress_event_unknown_total_is_indeterminate() -> None:
     assert event["indeterminate"] is True
 
 
+def test_progress_event_reads_title_from_documented_info_field() -> None:
+    event = engine._progress_event("FETCH_PROGRESS\tdownloading\t0\t100\tNA\tNA\tNA\t1\t4\tavc1\tNA\tNA\tTrack title")
+    assert event is not None
+    assert event["title"] == "Track title"
+
+
 def test_quality_args_order_preserves_h264_preference_and_applies_resolution_cap() -> None:
     compatible = engine._quality_args("compatible", "")
     assert compatible == ["-S", "vcodec:h264,lang,quality,res,fps,hdr:12,acodec:aac", "--merge-output-format", "mp4"]
