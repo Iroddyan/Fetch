@@ -69,6 +69,12 @@ class FetchWindow(Adw.ApplicationWindow):
         self._clipboard_source_id: int | None = None
         self.queue_manager = QueueManager(lambda: settings.download_directory, settings.queue_concurrency)
         apply_color_scheme(settings.color_scheme)
+        text_drop = Gtk.DropTarget.new(str, Gdk.DragAction.COPY)
+        text_drop.connect("drop", self._drop_text)
+        self.add_controller(text_drop)
+        uri_drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
+        uri_drop.connect("drop", self._drop_uri_list)
+        self.add_controller(uri_drop)
 
         self.toolbar = Adw.ToolbarView()
         self.set_content(self.toolbar)
@@ -295,6 +301,15 @@ class FetchWindow(Adw.ApplicationWindow):
 
     def queue_urls(self, urls: list[str], skipped: int = 0) -> None:
         self._queue_quick_links(urls, skipped)
+
+    def _drop_text(self, _target: Gtk.DropTarget, value: str, _x: float, _y: float) -> bool:
+        self._process_pasted_text(value)
+        return True
+
+    def _drop_uri_list(self, _target: Gtk.DropTarget, value: Gdk.FileList, _x: float, _y: float) -> bool:
+        urls = [file.get_uri() for file in value.get_files()]
+        self._process_pasted_text("\n".join(urls))
+        return True
 
     def _open_settings(self, _button: Gtk.Button | None = None) -> None:
         self._open_settings_page("")
