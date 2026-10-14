@@ -12,14 +12,21 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from gi.repository import GLib
-
 from .engine import EngineError, _friendly_error, download_url
 from .paths import state_dir
 
 
 def _is_error_line(message: str) -> bool:
     return message.lstrip().upper().startswith("ERROR:")
+
+
+def _idle_add(callback: Callable, *args: object) -> object:
+    try:
+        from gi.repository import GLib
+    except ImportError:
+        callback(*args)
+        return None
+    return GLib.idle_add(callback, *args)
 
 
 @dataclass
@@ -54,9 +61,15 @@ class QueueItem:
 class QueueManager:
     """Persistent, bounded subprocess queue with explicit recovery after restart."""
 
-    def __init__(self, destination: Callable[[], Path], concurrency: int = 2) -> None:
+    def __init__(
+        self,
+        destination: Callable[[], Path],
+        concurrency: int = 2,
+        scheduler: Callable[..., object] = _idle_add,
+    ) -> None:
         self.path = state_dir() / "queue.json"
         self.destination = destination
+        self.scheduler = scheduler
         self.concurrency = max(1, min(4, concurrency))
         self._lock = threading.RLock()
         self._items: list[QueueItem] = []
@@ -274,7 +287,7 @@ class QueueManager:
             listeners = list(self._listeners)
             snapshot = [QueueItem(**asdict(item)) for item in self._items]
         for listener in listeners:
-            GLib.idle_add(listener, snapshot)
+            self.scheduler(listener, snapshot)
 
     def _pump(self) -> None:
         with self._lock:
