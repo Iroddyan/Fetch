@@ -148,6 +148,15 @@ def _quality_args(quality_preference: str, max_resolution: str, *, audio_only: b
     return args
 
 
+def _audio_format_spec(audio_format: str | None) -> str:
+    selected = (audio_format or "").strip().lower()
+    if selected == "m4a":
+        return "bestaudio[ext=m4a]/bestaudio/best"
+    if selected == "opus":
+        return "bestaudio[acodec=opus]/bestaudio/best"
+    return "bestaudio/best"
+
+
 def _filename_template(is_playlist: bool, audio_format: str | None, include_media_id: bool) -> str:
     title_template = (
         "%(artist,creator,uploader,channel|Unknown Artist)s - %(title|Untitled)s"
@@ -305,6 +314,8 @@ def download_url(
     include_media_id: bool = False,
     custom_arguments: str = "",
 ) -> tuple[int, str]:
+    if audio_format:
+        format_spec = _audio_format_spec(audio_format)
     executable = find_binary("yt-dlp")
     if not executable:
         message = (

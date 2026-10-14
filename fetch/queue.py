@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from .engine import EngineError, _friendly_error, download_url
+from .engine import EngineError, _audio_format_spec, _friendly_error, download_url
 from .paths import state_dir
 
 
@@ -102,7 +102,11 @@ class QueueManager:
             return [QueueItem(**asdict(item)) for item in self._items]
 
     def add(self, url: str, title: str, options: dict[str, object]) -> str:
-        item = QueueItem.create(url, title, options)
+        queue_options = dict(options)
+        audio_format = str(queue_options.get("audio_format") or "")
+        if audio_format:
+            queue_options["format_spec"] = _audio_format_spec(audio_format)
+        item = QueueItem.create(url, title, queue_options)
         with self._lock:
             self._items.append(item)
             should_start = not self._start_explicitly_required
@@ -369,7 +373,9 @@ class QueueManager:
                 on_event,
                 register,
                 on_command,
-                format_spec=str(options.get("format_spec") or "bestvideo*+bestaudio/best"),
+                format_spec=_audio_format_spec(str(options.get("audio_format")))
+                if options.get("audio_format")
+                else str(options.get("format_spec") or "bestvideo*+bestaudio/best"),
                 audio_format=str(options["audio_format"]) if options.get("audio_format") else None,
                 subtitle_languages=str(options.get("subtitle_languages") or ""),
                 embed_subtitles=bool(options.get("embed_subtitles")),

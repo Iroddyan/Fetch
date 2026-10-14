@@ -32,3 +32,14 @@ def test_playlist_with_logged_error_is_not_marked_fully_completed(tmp_path: Path
     assert "Unable to embed thumbnail" in result.error
     assert result.error_hint
     manager.shutdown(clear_queue=True)
+
+
+def test_audio_queue_options_use_engine_audio_selector(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(queue, "state_dir", lambda: tmp_path)
+    manager = QueueManager(lambda: tmp_path, scheduler=lambda callback, *args: callback(*args))
+    monkeypatch.setattr(manager, "start", lambda: None)
+
+    manager.add("https://example.test/audio", "Audio", {"audio_format": "m4a", "format_spec": "wrong"})
+
+    assert manager.items()[0].options["format_spec"] == "bestaudio[ext=m4a]/bestaudio/best"
+    manager.shutdown()

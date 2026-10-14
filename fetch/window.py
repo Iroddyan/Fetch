@@ -445,7 +445,7 @@ class FetchWindow(Adw.ApplicationWindow):
         audio_box.append(self.audio_only_check)
         audio_box.append(Gtk.Label(label="Save as", css_classes=["dim-label"]))
         self.audio_format_dropdown = Gtk.DropDown(
-            model=Gtk.StringList.new(["MP3", "FLAC", "M4A", "Opus"])
+            model=Gtk.StringList.new(["MP3", "FLAC (lossless container, no quality gain from YouTube)", "M4A", "Opus"])
         )
         self.audio_format_dropdown.set_selected(2)
         audio_box.append(self.audio_format_dropdown)
@@ -527,7 +527,9 @@ class FetchWindow(Adw.ApplicationWindow):
         options.append(Gtk.Label(label="Format", xalign=0))
         self.playlist_audio_check = Gtk.CheckButton(label="Audio only")
         options.append(self.playlist_audio_check)
-        self.playlist_audio_format = Gtk.DropDown(model=Gtk.StringList.new(["MP3", "FLAC", "M4A", "Opus"]))
+        self.playlist_audio_format = Gtk.DropDown(model=Gtk.StringList.new([
+            "MP3", "FLAC (lossless container, no quality gain from YouTube)", "M4A", "Opus",
+        ]))
         self.playlist_audio_format.set_selected(2)
         options.append(self.playlist_audio_format)
         body.append(options)
@@ -575,7 +577,7 @@ class FetchWindow(Adw.ApplicationWindow):
             audio_formats = ("mp3", "flac", "m4a", "opus")
             subtitles = self.playlist_languages_entry.get_text().strip() if self.playlist_subtitles_check.get_active() else ""
             options = {
-                "format_spec": "bestaudio/best" if audio_only else "bestvideo*+bestaudio/best",
+                "format_spec": "" if audio_only else "bestvideo*+bestaudio/best",
                 "audio_format": audio_formats[fmt_idx] if audio_only else "",
                 "is_playlist": True,
                 "playlist_items": playlist_items,
@@ -590,7 +592,7 @@ class FetchWindow(Adw.ApplicationWindow):
         audio_only = self.audio_only_check.get_active()
         selected = self.format_dropdown.get_selected()
         chosen = self._format_choices[selected] if selected < len(self._format_choices) else None
-        format_spec = "bestaudio/best" if audio_only else (
+        format_spec = "" if audio_only else (
             f"{chosen.format_id}+bestaudio/best" if chosen and chosen.has_video and not chosen.has_audio
             else chosen.format_id if chosen else "bestvideo*+bestaudio/best"
         )

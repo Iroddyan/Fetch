@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 from fetch import dependencies, engine
 
@@ -35,6 +39,48 @@ def test_quality_args_order_preserves_h264_preference_and_applies_resolution_cap
     assert engine._quality_args("best", "") == []
     assert engine._quality_args("best", "1080") == ["-S", "res:1080"]
     assert engine._quality_args("compatible", "720", audio_only=True) == []
+
+
+def test_audio_format_spec_prefers_native_streams() -> None:
+    assert engine._audio_format_spec("m4a") == "bestaudio[ext=m4a]/bestaudio/best"
+    assert engine._audio_format_spec("opus") == "bestaudio[acodec=opus]/bestaudio/best"
+    assert engine._audio_format_spec("mp3") == "bestaudio/best"
+    assert engine._audio_format_spec("flac") == "bestaudio/best"
+    assert engine._audio_format_spec(None) == "bestaudio/best"
+
+
+@pytest.mark.skipif(shutil.which("yt-dlp") is None, reason="yt-dlp is not installed")
+def test_m4a_selector_chooses_aac_in_synthetic_info_json(tmp_path: Path) -> None:
+    info = {
+        "id": "synthetic",
+        "title": "Synthetic song",
+        "extractor": "test",
+        "extractor_key": "Test",
+        "webpage_url": "https://example.test/synthetic",
+        "original_url": "https://example.test/synthetic",
+        "formats": [
+            {
+                "format_id": "251", "url": "https://example.test/opus", "ext": "webm",
+                "acodec": "opus", "vcodec": "none", "protocol": "https", "filesize": 100,
+            },
+            {
+                "format_id": "140", "url": "https://example.test/aac", "ext": "m4a",
+                "acodec": "mp4a.40.2", "vcodec": "none", "protocol": "https", "filesize": 100,
+            },
+        ],
+    }
+    info_path = tmp_path / "synthetic.info.json"
+    info_path.write_text(json.dumps(info), encoding="utf-8")
+    result = subprocess.run(
+        [
+            "yt-dlp", "--load-info-json", str(info_path), "--simulate", "--format",
+            engine._audio_format_spec("m4a"), "--print", "%(format_id)s %(acodec)s",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "140 mp4a.40.2"
 
 
 def test_is_video_playlist_url_and_base_no_playlist_flag() -> None:
