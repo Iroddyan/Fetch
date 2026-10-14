@@ -13,6 +13,26 @@ def should_check_yt_dlp_update(now: int, last_success: int, last_attempt: int) -
     return not last_attempt or now - last_attempt >= 60 * 60
 
 
+def resolve_preset(name: str) -> dict[str, object]:
+    if name.strip().lower() == "music":
+        return {
+            "preset": "Music",
+            "audio_only": True,
+            "audio_format": "m4a",
+            "format_spec": "",
+            "embed_metadata": True,
+            "embed_thumbnail": True,
+        }
+    return {
+        "preset": "Video",
+        "audio_only": False,
+        "audio_format": "",
+        "format_spec": "bestvideo*+bestaudio/best",
+        "embed_metadata": None,
+        "embed_thumbnail": None,
+    }
+
+
 class Settings:
     """Small, immediately persisted set of user-facing preferences."""
 
@@ -46,6 +66,7 @@ class Settings:
             "custom_arguments": "",
             "notifications_enabled": True,
             "clipboard_offer": False,
+            "download_preset": "Music",
         }
         self.load()
 
@@ -62,6 +83,8 @@ class Settings:
                     self.values["color_scheme"] = loaded["color_scheme"]
                 if isinstance(loaded.get("settings_page"), str):
                     self.values["settings_page"] = loaded["settings_page"]
+                if isinstance(loaded.get("download_preset"), str) and loaded["download_preset"] in {"Music", "Video"}:
+                    self.values["download_preset"] = loaded["download_preset"]
                 if isinstance(loaded.get("queue_concurrency"), int):
                     self.values["queue_concurrency"] = max(1, min(4, loaded["queue_concurrency"]))
                 if isinstance(loaded.get("quality_preference"), str) and loaded["quality_preference"] in {"compatible", "best"}:

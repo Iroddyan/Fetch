@@ -18,7 +18,7 @@ from .dependencies import is_flatpak, latest_yt_dlp_version, update_yt_dlp
 from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import state_dir
 from .queue import QueueItem, QueueManager
-from .settings import Settings, should_check_yt_dlp_update
+from .settings import Settings, resolve_preset, should_check_yt_dlp_update
 from .settings_pages import SettingsWindow
 
 
@@ -104,6 +104,14 @@ class FetchWindow(Adw.ApplicationWindow):
         intro.append(title)
         intro.append(description)
         content.append(intro)
+
+        preset_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        preset_row.append(Gtk.Label(label="Preset", xalign=0))
+        self.preset_dropdown = Gtk.DropDown(model=Gtk.StringList.new(["Music", "Video"]))
+        self.preset_dropdown.set_selected(0 if settings.values.get("download_preset", "Music") == "Music" else 1)
+        self.preset_dropdown.connect("notify::selected", self._preset_changed)
+        preset_row.append(self.preset_dropdown)
+        content.append(preset_row)
 
         self.update_banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.update_banner.add_css_class("card")
@@ -422,6 +430,7 @@ class FetchWindow(Adw.ApplicationWindow):
             self._add_playlist_controls(body, info)
         else:
             self._add_media_controls(body, info)
+        self._apply_preset_to_controls()
         card.set_child(body)
         self.media_card.set_child(card)
         self.status_label.set_text("Choose your options, then add to the queue.")
@@ -479,6 +488,24 @@ class FetchWindow(Adw.ApplicationWindow):
         subtitle_box.append(self.embed_subtitles_check)
         subtitle_box.append(self.embed_chapters_check)
         body.append(subtitle_box)
+
+    def _selected_preset(self) -> str:
+        return "Music" if self.preset_dropdown.get_selected() == 0 else "Video"
+
+    def _preset_changed(self, *_args: object) -> None:
+        preset = self._selected_preset()
+        self.settings.set("download_preset", preset)
+        self._apply_preset_to_controls()
+
+    def _apply_preset_to_controls(self) -> None:
+        preset = resolve_preset(self._selected_preset())
+        audio_format_index = ("mp3", "flac", "m4a", "opus").index(str(preset["audio_format"])) if preset["audio_only"] else 2
+        if hasattr(self, "audio_only_check"):
+            self.audio_only_check.set_active(bool(preset["audio_only"]))
+            self.audio_format_dropdown.set_selected(audio_format_index)
+        if hasattr(self, "playlist_audio_check"):
+            self.playlist_audio_check.set_active(bool(preset["audio_only"]))
+            self.playlist_audio_format.set_selected(audio_format_index)
 
     def _add_playlist_controls(self, body: Gtk.Box, info: MediaInfo) -> None:
         count = info.playlist_count or len(info.playlist_entries)
@@ -586,8 +613,13 @@ class FetchWindow(Adw.ApplicationWindow):
                 "embed_subtitles": self.playlist_embed_subtitles_check.get_active(),
                 "automatic_subtitles": self.playlist_auto_subtitles_check.get_active(),
                 "embed_chapters": self.playlist_embed_chapters_check.get_active(),
+                "preset": self._selected_preset(),
             }
             options.update(self._advanced_options())
+            preset = resolve_preset(self._selected_preset())
+            if preset["embed_metadata"] is not None:
+                options["embed_metadata"] = preset["embed_metadata"]
+                options["embed_thumbnail"] = preset["embed_thumbnail"]
             return options
 
         audio_only = self.audio_only_check.get_active()
@@ -607,8 +639,13 @@ class FetchWindow(Adw.ApplicationWindow):
             "embed_subtitles": self.embed_subtitles_check.get_active(),
             "automatic_subtitles": self.auto_subtitles_check.get_active(),
             "embed_chapters": self.embed_chapters_check.get_active(),
+            "preset": self._selected_preset(),
         }
         options.update(self._advanced_options())
+        preset = resolve_preset(self._selected_preset())
+        if preset["embed_metadata"] is not None:
+            options["embed_metadata"] = preset["embed_metadata"]
+            options["embed_thumbnail"] = preset["embed_thumbnail"]
         return options
 
     def _advanced_options(self) -> dict[str, object]:

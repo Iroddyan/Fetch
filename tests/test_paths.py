@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fetch import paths
-from fetch.settings import Settings, should_check_yt_dlp_update
+from fetch.settings import Settings, resolve_preset, should_check_yt_dlp_update
 
 
 def test_xdg_application_directories_keep_application_id(monkeypatch, tmp_path: Path) -> None:
@@ -76,3 +76,26 @@ def test_settings_load_validates_update_attempt_timestamp(monkeypatch, tmp_path:
         encoding="utf-8",
     )
     assert Settings().values["last_yt_dlp_check_attempt"] == 5678
+
+
+def test_download_preset_defaults_to_music_and_validates_existing_values(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("fetch.settings.config_dir", lambda: tmp_path)
+    monkeypatch.setattr("fetch.settings.initial_download_dir", lambda: tmp_path)
+    assert Settings().values["download_preset"] == "Music"
+    settings = Settings()
+    settings.path.write_text('{"download_preset":"Video"}', encoding="utf-8")
+    assert Settings().values["download_preset"] == "Video"
+    settings.path.write_text('{"download_preset":"Not a preset"}', encoding="utf-8")
+    assert Settings().values["download_preset"] == "Music"
+
+
+def test_preset_resolution_returns_builtin_queue_options() -> None:
+    assert resolve_preset("Music") == {
+        "preset": "Music", "audio_only": True, "audio_format": "m4a", "format_spec": "",
+        "embed_metadata": True, "embed_thumbnail": True,
+    }
+    assert resolve_preset("Video") == {
+        "preset": "Video", "audio_only": False, "audio_format": "",
+        "format_spec": "bestvideo*+bestaudio/best", "embed_metadata": None,
+        "embed_thumbnail": None,
+    }
