@@ -18,6 +18,10 @@ from .engine import EngineError, _friendly_error, download_url
 from .paths import state_dir
 
 
+def _is_error_line(message: str) -> bool:
+    return message.lstrip().upper().startswith("ERROR:")
+
+
 @dataclass
 class QueueItem:
     id: str
@@ -37,6 +41,7 @@ class QueueItem:
     error: str = ""
     error_hint: str = ""
     error_action: str = "none"
+    logged_errors: list[str] = field(default_factory=list)
     command: str = ""
     logs: list[str] = field(default_factory=list)
     updated_at: float = field(default_factory=time.time)
@@ -135,7 +140,7 @@ class QueueManager:
     def cancel(self, item_id: str) -> None:
         with self._lock:
             item = self._get(item_id)
-            if not item or item.status in {"completed", "failed", "cancelled"}:
+            if not item or item.status in {"completed", "completed_with_errors", "failed", "cancelled"}:
                 return
             process = self._processes.get(item_id)
             if process:
@@ -170,6 +175,7 @@ class QueueManager:
             item.error = ""
             item.error_hint = ""
             item.error_action = "none"
+            item.logged_errors = []
             item.logs = []
             item.attempt += 1
             item.updated_at = time.time()
@@ -381,19 +387,30 @@ class QueueManager:
                     elif cancelled:
                         item.status = "cancelled"
                     elif code == 0:
-                        item.status = "completed"
                         item.progress = 100.0
                         item.entry_progress = 100.0
                         item.progress_indeterminate = False
-                        item.stage = "Completed"
                         item.speed = ""
                         item.eta = ""
-                        item.logs.append("Download completed successfully.")
+                        if item.logged_errors:
+                            item.status = "completed_with_errors"
+                            item.stage = "Completed with errors"
+                            details = "\n".join(item.logged_errors)
+                            item.error = details
+                            item.error_hint = (
+                                "yt-dlp reported errors for one or more items. Other playlist items may have "
+                                "downloaded; open Log to review the details."
+                            )
+                            item.logs.append("Playlist finished with errors.")
+                        else:
+                            item.status = "completed"
+                            item.stage = "Completed"
+                            item.logs.append("Download completed successfully.")
                     elif pause_requested and item.status in {"paused", "waiting"}:
                         item.error = ""
                     else:
                         item.status = "failed"
-                        details = "\n".join(item.logs[-15:]) or f"yt-dlp exited with status {code}."
+                        details = "\n".join(item.logged_errors or item.logs[-15:]) or f"yt-dlp exited with status {code}."
                         error_details = _friendly_error(details)
                         item.error = error_details.message
                         item.error_hint = error_details.hint
@@ -472,6 +489,9 @@ class QueueManager:
                 message = str(event.get("message") or "")
                 if message:
                     item.logs.append(message)
+                    if _is_error_line(message):
+                        item.logged_errors.append(message)
+                        item.logged_errors = item.logged_errors[-50:]
             item.logs = item.logs[-500:]
             item.updated_at = time.time()
             if time.monotonic() - self._last_saved >= 3:

@@ -44,6 +44,7 @@ def _status_label(status: str) -> str:
         "running": "Downloading",
         "paused": "Paused",
         "completed": "Completed",
+        "completed_with_errors": "Completed with errors",
         "failed": "Failed",
         "interrupted": "Interrupted",
         "cancelled": "Cancelled",
@@ -694,7 +695,7 @@ class FetchWindow(Adw.ApplicationWindow):
         self.clear_queue_button.set_sensitive(bool(items))
         for item in items:
             previous = self._last_job_states.get(item.id)
-            if previous != item.status and item.status in {"completed", "failed"}:
+            if previous != item.status and item.status in {"completed", "completed_with_errors", "failed"}:
                 self._notify_job(item)
             self._last_job_states[item.id] = item.status
             self.queue_list.append(self._queue_row(item))
@@ -704,7 +705,11 @@ class FetchWindow(Adw.ApplicationWindow):
         if not self.settings.values.get("notifications_enabled", True):
             return
         notification = Gio.Notification.new(
-            "Download complete" if item.status == "completed" else "Download failed"
+            {
+                "completed": "Download complete",
+                "completed_with_errors": "Download finished with errors",
+                "failed": "Download failed",
+            }.get(item.status, "Download finished")
         )
         notification.set_body(item.title)
         self.get_application().send_notification(f"fetch-{item.id}", notification)
@@ -735,7 +740,7 @@ class FetchWindow(Adw.ApplicationWindow):
             context.append(item.stage)
         context.extend(([] if item.progress_indeterminate else [f"{item.progress:.1f}%"]) + ([detail] if detail else []))
         progress.set_text(" · ".join(context) or _status_label(item.status))
-        progress.set_visible(item.status in {"running", "paused", "completed"})
+        progress.set_visible(item.status in {"running", "paused", "completed", "completed_with_errors"})
         layout.append(progress)
         if item.error:
             error = Gtk.Label(label=item.error, xalign=0, wrap=True, selectable=True)
@@ -775,7 +780,7 @@ class FetchWindow(Adw.ApplicationWindow):
         command_button.set_sensitive(bool(item.command))
         command_button.connect("clicked", lambda _button, value=item: self._show_text_window("yt-dlp command", value.command))
         buttons.append(command_button)
-        if item.status == "completed":
+        if item.status in {"completed", "completed_with_errors"}:
             folder_button = Gtk.Button(label="Show in Files", icon_name="folder-open-symbolic")
             folder_button.connect("clicked", self._open_download_folder)
             buttons.append(folder_button)
