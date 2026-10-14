@@ -11,13 +11,15 @@ Fetch **1.1.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets 
 - GTK 4 and libadwaita interface with searchable, persistent settings pages.
 - URL and playlist inspection, thumbnails, media details, format selection, and playlist item selection.
 - Best-quality and audio-only downloads, subtitles, chapters, metadata, thumbnail embedding, and SponsorBlock.
-- Queue with concurrency limits, structured progress, speed and ETA, pause/resume, cancel, retry, and a Clear Queue action. By default, the queue is cleared when Fetch closes; this can be changed in Settings → Downloads.
+- Queue with concurrency limits, structured progress, speed and ETA, pause/resume from partial files, cancel, retry, and a Clear Queue action. Pause stops yt-dlp; resume relaunches it so it can continue from partial files. By default, the queue is cleared when Fetch closes; this can be changed in Settings → Downloads.
 - Music downloads default to M4A, embedded square artwork, and `Artist - Title` filenames without the media ID. Playlist music uses the same filenames as standalone tracks. Settings → Media lets you change artwork embedding or include IDs.
 - Direct, checksum-verified updates for the official yt-dlp and Deno Linux builds, independent of app updates. System-provided tools remain supported.
 - Dependency status for yt-dlp, ffmpeg, ffprobe, and Deno, with yt-dlp errors and command logs available from the queue.
 - Cookies.txt import and browser-cookie selection, optional yt-dlp configuration, download archive, proxy and speed limits, retries, and raw yt-dlp arguments.
 - Optional desktop notifications and clipboard link offers. Clipboard monitoring is off by default and never starts downloads automatically.
 - Flatpak manifest and Fedora RPM spec for distribution.
+
+Tests use only the Python standard library plus pytest. In a Python environment, install pytest with `python -m pip install pytest`, then run `python -m pytest`.
 
 ## Requirements
 
@@ -50,7 +52,30 @@ The initial download location is the system Downloads directory, falling back to
 
 ## Install, update, and uninstall
 
-Fetch can be installed as a locally built Flatpak or as a Fedora RPM. The Flatpak is built from this checkout; no Flathub listing is required. The RPM is intended for Fedora and compatible RPM systems that provide the dependencies listed in `packaging/fetch.spec`.
+Fetch can be installed as a locally built Flatpak, a user-level native install, or as a Fedora RPM. The Flatpak is built from this checkout; no Flathub listing is required. The RPM is intended for Fedora and compatible RPM systems that provide the dependencies listed in `packaging/fetch.spec`.
+
+### Which install should I use?
+
+- **Flatpak** works on any Linux distribution with Flatpak, including older distributions. It bundles the GTK runtime Fetch needs.
+- **User-level native install** with `install.sh` works on distributions that provide GTK 4.8+, libadwaita 1.4+, and PyGObject on the host.
+- **RPM** is for Fedora and compatible RPM-based systems.
+- Debian 12 provides libadwaita 1.2.2, and Ubuntu 22.04 provides 1.1.7 through its updates repository; both are older than Fetch’s 1.4 minimum. Use the Flatpak on these releases ([Debian package](https://packages.debian.org/bookworm/libadwaita-1-dev), [Ubuntu updates package](https://packages.ubuntu.com/jammy-updates/libadwaita-1-dev)).
+
+### User-level native install
+
+From the Fetch checkout, install under `~/.local` without administrator access:
+
+```sh
+./install.sh
+```
+
+Launch Fetch from the application menu or run `~/.local/bin/fetch`. To remove this user-level installation:
+
+```sh
+./uninstall.sh
+```
+
+These scripts remove or replace only Fetch’s application files; your settings and downloaded media remain in place.
 
 ### Flatpak
 
@@ -143,5 +168,5 @@ Fetch app releases are separate from yt-dlp updates. To update the managed yt-dl
 
 - Playlist inspection lists up to 500 entries at once. Use the playlist range controls to select a range beyond the visible list.
 - Exact format selection is available for individually inspected media. Playlist downloads use best quality or audio-only settings because a playlist inspection does not retrieve every item's complete format list.
-- Pause/resume uses Linux process-group signals. By default, Clear Queue on Quit removes queued work and stops active downloads when Fetch closes. Turn it off in Settings → Downloads to keep interrupted items for later.
+- Pause stops yt-dlp, and resume relaunches it to continue from partial files. By default, Clear Queue on Quit removes queued work and stops active downloads when Fetch closes. Turn it off in Settings → Downloads to keep interrupted items for later.
 - Flatpak can read browser profiles only when the user grants the required access; the imported cookies.txt flow avoids that dependency.
