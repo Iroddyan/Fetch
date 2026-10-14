@@ -7,6 +7,12 @@ from pathlib import Path
 from .paths import config_dir, initial_download_dir
 
 
+def should_check_yt_dlp_update(now: int, last_success: int, last_attempt: int) -> bool:
+    if last_success and now - last_success < 24 * 60 * 60:
+        return False
+    return not last_attempt or now - last_attempt >= 60 * 60
+
+
 class Settings:
     """Small, immediately persisted set of user-facing preferences."""
 
@@ -23,6 +29,7 @@ class Settings:
             "auto_check_yt_dlp": True,
             "yt_dlp_channel": "stable",
             "last_yt_dlp_check": 0,
+            "last_yt_dlp_check_attempt": 0,
             "cookies_file": "",
             "use_cookies": False,
             "browser_cookies": "",
@@ -67,6 +74,8 @@ class Settings:
                     self.values["yt_dlp_channel"] = loaded["yt_dlp_channel"]
                 if isinstance(loaded.get("last_yt_dlp_check"), (int, float)):
                     self.values["last_yt_dlp_check"] = int(loaded["last_yt_dlp_check"])
+                if isinstance(loaded.get("last_yt_dlp_check_attempt"), (int, float)):
+                    self.values["last_yt_dlp_check_attempt"] = int(loaded["last_yt_dlp_check_attempt"])
                 for key in (
                     "use_cookies", "use_yt_dlp_config", "download_archive", "sponsorblock",
                     "embed_metadata", "embed_thumbnail", "include_media_id", "clear_queue_on_exit",

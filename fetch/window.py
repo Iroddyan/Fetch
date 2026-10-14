@@ -17,7 +17,7 @@ from .dependencies import is_flatpak, latest_yt_dlp_version, update_yt_dlp
 from .engine import ErrorDetails, EngineError, FormatInfo, MediaInfo, _is_video_playlist_url, binary_version, find_binary, inspect_url
 from .paths import state_dir
 from .queue import QueueItem, QueueManager
-from .settings import Settings
+from .settings import Settings, should_check_yt_dlp_update
 from .settings_pages import SettingsWindow
 
 
@@ -264,20 +264,24 @@ class FetchWindow(Adw.ApplicationWindow):
             return
         now = int(time.time())
         last_check = int(self.settings.values.get("last_yt_dlp_check", 0))
-        if now - last_check < 24 * 60 * 60:
+        last_attempt = int(self.settings.values.get("last_yt_dlp_check_attempt", 0))
+        if not should_check_yt_dlp_update(now, last_check, last_attempt):
             return
-        self.settings.set("last_yt_dlp_check", now)
         channel = str(self.settings.values.get("yt_dlp_channel", "stable"))
 
         def work() -> None:
             try:
                 latest = latest_yt_dlp_version(channel)
+                if not latest:
+                    raise RuntimeError("The latest yt-dlp version could not be determined.")
+                self.settings.set("last_yt_dlp_check", now)
                 current = binary_version("yt-dlp")
                 latest_key = tuple(int(value) for value in latest.split(".") if value.isdigit())
                 current_key = tuple(int(value) for value in (current or "").split(".") if value.isdigit())
                 if current_key and latest_key > current_key:
                     GLib.idle_add(self._show_update_banner, latest)
             except Exception:
+                self.settings.set("last_yt_dlp_check_attempt", now)
                 return
 
         threading.Thread(target=work, name="fetch-update-check", daemon=True).start()

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fetch import paths
+from fetch.settings import Settings, should_check_yt_dlp_update
 
 
 def test_xdg_application_directories_keep_application_id(monkeypatch, tmp_path: Path) -> None:
@@ -49,3 +50,29 @@ def test_initial_download_dir_expands_home_and_requires_existing_folder(monkeypa
 
     (config / "user-dirs.dirs").write_text('XDG_DOWNLOAD_DIR="$HOME/missing"\n', encoding="utf-8")
     assert paths.initial_download_dir() == home / "Downloads"
+
+
+def test_update_check_schedule_retries_failures_hourly_and_success_daily() -> None:
+    assert should_check_yt_dlp_update(100_000, 0, 0)
+    assert not should_check_yt_dlp_update(100_000, 90_000, 0)
+    assert not should_check_yt_dlp_update(100_000, 0, 99_000)
+    assert should_check_yt_dlp_update(103_000, 0, 99_000)
+
+
+def test_settings_load_validates_update_attempt_timestamp(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    settings = Settings()
+    settings.path.parent.mkdir(parents=True)
+    settings.path.write_text(
+        '{"last_yt_dlp_check": 1234, "last_yt_dlp_check_attempt": "invalid"}',
+        encoding="utf-8",
+    )
+    loaded = Settings()
+    assert loaded.values["last_yt_dlp_check"] == 1234
+    assert loaded.values["last_yt_dlp_check_attempt"] == 0
+
+    settings.path.write_text(
+        '{"last_yt_dlp_check_attempt": 5678}',
+        encoding="utf-8",
+    )
+    assert Settings().values["last_yt_dlp_check_attempt"] == 5678
