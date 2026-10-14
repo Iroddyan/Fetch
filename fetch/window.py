@@ -751,6 +751,7 @@ class FetchWindow(Adw.ApplicationWindow):
             "embed_metadata": bool(self.settings.values.get("embed_metadata", True)),
             "embed_thumbnail": bool(self.settings.values.get("embed_thumbnail", True)),
             "include_media_id": bool(self.settings.values.get("include_media_id", False)),
+            "download_synced_lyrics": bool(self.settings.values.get("download_synced_lyrics", False)),
             "no_playlist": self.single_video_check.get_active(),
             "quality_preference": str(self.settings.values.get("quality_preference", "compatible")),
             "max_resolution": str(self.settings.values.get("max_resolution", "")),

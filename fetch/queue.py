@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .engine import EngineError, _audio_format_spec, _friendly_error, download_url
+from .lyrics import save_synced_lyrics
 from .paths import state_dir
 
 
@@ -119,6 +120,8 @@ class QueueManager:
         self._start_explicitly_required = False
         self._closed = False
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="fetch-queue")
+        self._lyrics_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fetch-lyrics")
+        self._last_lyrics_request = 0.0
         self._load()
         self._start_explicitly_required = any(
             item.status in {"waiting", "interrupted"} for item in self._items
@@ -285,6 +288,7 @@ class QueueManager:
                 self._persist_locked()
             self._listeners.clear()
         self._executor.shutdown(wait=False, cancel_futures=True)
+        self._lyrics_executor.shutdown(wait=False, cancel_futures=False)
 
     def _load(self) -> None:
         try:
@@ -528,6 +532,10 @@ class QueueManager:
                 item.album = str(event.get("album") or "")
                 value = event.get("duration")
                 item.duration = float(value) if isinstance(value, (int, float)) else None
+                if item.options.get("download_synced_lyrics") and item.options.get("audio_format") and item.output_path:
+                    self._lyrics_executor.submit(
+                        self._save_lyrics, item_id, item.output_path, item.artist, item.media_title, item.album, item.duration
+                    )
             elif event.get("type") == "progress":
                 title = event.get("title")
                 if isinstance(title, str) and title:
@@ -571,3 +579,19 @@ class QueueManager:
 
     def _get(self, item_id: str) -> QueueItem | None:
         return next((item for item in self._items if item.id == item_id), None)
+
+    def _save_lyrics(
+        self,
+        item_id: str,
+        output_path: str,
+        artist: str,
+        title: str,
+        album: str,
+        duration: float | None,
+    ) -> None:
+        delay = 0.3 - (time.monotonic() - self._last_lyrics_request) if self._last_lyrics_request else 0
+        if delay > 0:
+            time.sleep(delay)
+        self._last_lyrics_request = time.monotonic()
+        if save_synced_lyrics(output_path, artist, title, album, duration):
+            self._handle_event(item_id, {"type": "log", "message": f"Saved synced lyrics for {title}."})

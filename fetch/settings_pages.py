@@ -109,6 +109,12 @@ class SettingsWindow(Adw.PreferencesWindow):
             "Append the source media ID to music filenames to help distinguish similarly named tracks.",
             "include_media_id",
         )
+        self._add_switch(
+            music_group,
+            "Download synced lyrics (.lrc)",
+            "Fetch sends artist, title, album, and duration to LRCLIB (lrclib.net) to look for matching synced lyrics.",
+            "download_synced_lyrics",
+        )
         media.add(music_group)
         media.set_name("media")
         self.add(media)

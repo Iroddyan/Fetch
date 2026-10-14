@@ -89,6 +89,7 @@ def test_download_preset_defaults_to_music_and_validates_existing_values(tmp_pat
     settings.path.write_text('{"download_preset":"Not a preset"}', encoding="utf-8")
     assert Settings().values["download_preset"] == "Music"
     assert Settings().values["quick_add"] is True
+    assert Settings().values["download_synced_lyrics"] is False
 
 
 def test_preset_resolution_returns_builtin_queue_options() -> None:

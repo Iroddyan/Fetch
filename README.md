@@ -17,6 +17,7 @@ Fetch **1.2.0** builds on the Bits 0–15 v1.0 roadmap release. The app targets 
 - Dependency status for yt-dlp, ffmpeg, ffprobe, and Deno, with yt-dlp errors and command logs available from the queue.
 - Cookies.txt import and browser-cookie selection, optional yt-dlp configuration, download archive, proxy and speed limits, retries, and raw yt-dlp arguments.
 - Optional desktop notifications and clipboard link offers. Clipboard monitoring is off by default and never starts downloads automatically.
+- Optional synced `.lrc` lyrics sidecars. When enabled, Fetch sends the track’s artist, title, album, and duration to LRCLIB (`lrclib.net`); it saves synced lyrics only and never overwrites an existing sidecar.
 - Flatpak manifest and Fedora RPM spec for distribution.
 
 Tests use only the Python standard library plus pytest. In a Python environment, install pytest with `python -m pip install pytest`, then run `python -m pytest`.

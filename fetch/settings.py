@@ -68,6 +68,7 @@ class Settings:
             "clipboard_offer": False,
             "download_preset": "Music",
             "quick_add": True,
+            "download_synced_lyrics": False,
         }
         self.load()
 
@@ -108,6 +109,7 @@ class Settings:
                     "use_cookies", "use_yt_dlp_config", "download_archive", "sponsorblock",
                     "embed_metadata", "embed_thumbnail", "include_media_id", "clear_queue_on_exit",
                     "notifications_enabled", "clipboard_offer",
+                    "download_synced_lyrics",
                 ):
                     if key == "embed_thumbnail" and settings_version < 2:
                         continue
